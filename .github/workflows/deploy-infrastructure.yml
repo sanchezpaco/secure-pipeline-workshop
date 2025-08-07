@@ -11,15 +11,15 @@ jobs:
   deploy-infra:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.ref_name }} 
     outputs:
       result: ${{ steps.deploy.outputs.result }}
     steps:
       - name: Deploy infrastructure
         id: deploy
         run: |
-          echo "🚀 Deploying infrastructure to production..."
-          echo "🏗️ Terraform plan -var environment=production"
+          echo "🚀 Deploying infrastructure to ${{ github.ref_name }}}}..."
+          echo "🏗️ Terraform plan -var environment=${{ github.ref_name }}}}"
           echo "🏗️ Terraform apply -auto-approve"
           echo "result=deployed" >> "$GITHUB_OUTPUT"
           echo "✅ Infrastructure deployed successfully"
@@ -27,7 +27,7 @@ jobs:
       - name: Infrastructure Summary
         run: |
           echo "🏗️ Infrastructure Deployment Summary:"
-          echo "- Environment: production"
+          echo "- Environment: ${{ github.ref_name }}}}"
           echo "- Region: us-west-2"
           echo "- Resources: VPC, Subnets, Security Groups, EC2"
           echo "- Status: Healthy"

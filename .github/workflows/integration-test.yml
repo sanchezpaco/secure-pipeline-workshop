@@ -28,15 +28,15 @@ jobs:
         id: integration-test
         run: |
           echo "🚀 Running integration test..."
-          echo "🔍 Testing application at: ${{ inputs.app-url }}"
           echo "bip, bop, bup"
           echo "bip, bop, bup"
           echo "result=passed" >> "$GITHUB_OUTPUT"
           echo "✅ Integration test passed successfully"
 
       - name: Integration Test Summary
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           echo "🏗️ Integration Test Summary:"
-          echo "- Environment: ${{ inputs.environment }}"
-          echo "- Application URL: ${{ inputs.app-url }}"
+          echo "- Environment: $ENVIRONMENT"
           echo "- Status: Healthy"

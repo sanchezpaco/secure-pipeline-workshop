@@ -11,7 +11,7 @@ jobs:
   deploy-app:
     name: Deploy Application
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.ref_name }} 
     outputs:
       result: ${{ steps.deploy.outputs.result }}
     steps:
