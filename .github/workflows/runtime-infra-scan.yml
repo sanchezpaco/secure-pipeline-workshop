@@ -22,7 +22,7 @@ on:
 
 jobs:
   runtime-infra-scan:
-    name: Runtime Infrastructure Scan with Prowler
+    name: Runtime Infrastructure Scan with Steampipe
     runs-on: ubuntu-latest
     outputs:
       result: ${{ steps.scan-result.outputs.result }}
@@ -37,42 +37,52 @@ jobs:
         uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
         with:
             role-to-assume: ${{ secrets.AWS_IAM_ROLE_ARN }}
-            role-session-name: ProwlerSession
+            role-session-name: SteampipeSession
             aws-region: ${{ vars.AWS_REGION }}
             role-duration-seconds: ${{ vars.AWS_IAM_ROLE_SESSION_DURATION }}
             mask-aws-account-id: true
 
-      - name: Install Prowler
-        run: |
-            pipx install prowler
-            prowler -v
+      - name: Setup Steampipe
+        uses: turbot/steampipe-action-setup@48bd85e67fddae9843fe2ad7ef6af96a332507c5 # v1
+        with:
+          steampipe-version: 'latest'
+          plugin-connections: |
+            connection "aws" {
+              plugin = "aws"
+              regions = ["${{ vars.AWS_REGION }}"]
+            }
 
-      - name: Run Prowler
-        id: prowler
-        run: |
-            prowler aws --service iam s3 --output-formats html -z
-        continue-on-error: true
+      - name: Install Powerpipe
+        uses: turbot/powerpipe-action-setup@458766075e63ffeb1992e6109759526f68611708 # v1
 
-      - name: Message
+      - name: Start steampipe service
         run: |
-            echo "Prowler run completed"
+          steampipe service start
 
-      - name: Upload Prowler HTML Report
+      - name: Run specific AWS Compliance benchmarks
+        uses: turbot/powerpipe-action-check@0b905d17e8b6970bc39bcd347c053992bd8770de # v1.0.1
+        with:
+          mod-url: https://github.com/turbot/steampipe-mod-aws-compliance
+          benchmarks: |
+            cis_v150
+          artifact-exports: html
+
+      - name: Upload Powerpipe HTML Report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: prowler-html-report
-          path: output/*.html
+          name: powerpipe-html-report
+          path: aws_compliance.benchmark.cis_v150.*.html
           retention-days: 3
 
       - name: Set scan result
         id: scan-result
         if: always()
         run: |
-          if [ "${{ steps.prowler.outcome }}" == "success" ]; then
+          if [ "${{ steps.powerpipe.outcome }}" == "success" ]; then
             echo "result=success" >> "$GITHUB_OUTPUT"
-            echo "✅ Pipeline scan passed"
+            echo "✅ Runtime infrastructure scan passed - no critical issues found"
           else
             echo "result=failure" >> "$GITHUB_OUTPUT"
-            echo "❌ Pipeline scan failed"
+            echo "❌ Runtime infrastructure scan failed - security issues detected"
           fi

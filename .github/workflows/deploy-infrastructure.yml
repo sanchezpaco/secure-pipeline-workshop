@@ -32,6 +32,6 @@ jobs:
         run: |
           echo "🏗️ Infrastructure Deployment Summary:"
           echo "- Environment: $ENVIRONMENT"
-          echo "- Region: us-west-2"
+          echo "- Region: us-east-1"
           echo "- Resources: VPC, Subnets, Security Groups, EC2"
           echo "- Status: Healthy"
