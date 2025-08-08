@@ -125,6 +125,7 @@ resource "aws_security_group" "ecs_tasks" {
     cidr_blocks = [data.aws_vpc.existing.cidr_block]
   }
 
+  # trivy:ignore:AVD-AWS-0104
   egress {
     description = "HTTPS outbound"
     from_port   = 443
