@@ -27,7 +27,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner
         id: scan-tool
-        uses: aquasecurity/trivy-action@915b19bbe73b92a6cf82a1bc12b087c9a19a5fe2 # 0.28.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
           scan-type: 'config'
           scan-ref: infra/
@@ -41,7 +41,7 @@ jobs:
 
       - name: Upload Trivy scan results to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@51f77329afa6477de8c49fc9c7046c15b9a4e79d #3.29.5
+        uses: github/codeql-action/upload-sarif@7fc6561ed893d15cec696e062df840b21db27eb0 # v4.35.2
         with:
           sarif_file: 'trivy-results.sarif'
 

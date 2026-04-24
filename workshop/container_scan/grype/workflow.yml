@@ -59,7 +59,7 @@ jobs:
 
       - name: Run Grype vulnerability scanner
         id: scan-tool
-        uses: anchore/scan-action@df395807f4554463d4455b8047cf58e37b6acaae # v6.5.0
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           fail-build: true
@@ -69,7 +69,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Advanced Security
         if: always()
-        uses: github/codeql-action/upload-sarif@51f77329afa6477de8c49fc9c7046c15b9a4e79d #3.29.5
+        uses: github/codeql-action/upload-sarif@7fc6561ed893d15cec696e062df840b21db27eb0 # v4.35.2
         with:
           sarif_file: ${{ steps.scan-tool.outputs.sarif }}
           category: grype-container-scan
