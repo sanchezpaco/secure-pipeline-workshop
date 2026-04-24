@@ -10,34 +10,70 @@ permissions:
   contents: read
   security-events: write
   actions: read
-
 jobs:
-  # 🚧 REPLACE THE JOB SECTION WITH WORKSHOP CONTENT! 🚧
-  # Copy from: workshop/code_scan/sast/{tool}/workflow.yml 
-  sast-scan:
-    name: "🚧 SAST Scan - Placeholder"
+  codeql-scan:
+    name: CodeQL SAST Scan
     runs-on: ubuntu-latest
     outputs:
-      result: ${{ steps.placeholder.outputs.result }}
+      result: ${{ steps.scan-result.outputs.result }}
     steps:
-      - name: Workshop Placeholder
-        id: placeholder
-        run: |
-          echo "🚧 Replace this job with content from workshop/code_scan/sast/{tool}/workflow.yml!"
-          echo "This will implement: SAST scan with your chosen tool"
-          echo "result=workshop-placeholder" >> "$GITHUB_OUTPUT"
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-  # 🚧 REPLACE THE JOB SECTION WITH WORKSHOP CONTENT! 🚧
-  # Copy from: workshop/code_scan/sca/{tool}/workflow.yml
-  sca-scan:
-    name: "🚧 SCA Scan - Placeholder"
-    runs-on: ubuntu-latest
-    outputs:
-      result: ${{ steps.placeholder.outputs.result }}
-    steps:
-      - name: Workshop Placeholder
-        id: placeholder
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
+        with:
+          languages: javascript
+
+      - name: Perform CodeQL Analysis
+        id: codeql-tool
+        uses: github/codeql-action/analyze@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
+
+      - name: Wait for GitHub to process results
+        run: sleep 30
+
+      - name: Check for CodeQL security alerts
+        id: check-findings
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🚧 Replace this job with content from workshop/code_scan/sca/{tool}/workflow.yml!"
-          echo "This will implement: SCA scan with your chosen tool"
-          echo "result=workshop-placeholder" >> "$GITHUB_OUTPUT"
+          # Use gh CLI to check for code scanning alerts
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            ALERTS=$(gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&pr=${{ github.event.number }}&tool_name=CodeQL" 2>/dev/null || echo "[]")
+          else
+            ALERTS=$(gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&tool_name=CodeQL" 2>/dev/null || echo "[]")
+          fi
+          
+          ALERT_COUNT=$(echo "$ALERTS" | jq '. | length' 2>/dev/null || echo "0")
+          
+          echo "alert_count=$ALERT_COUNT" >> "$GITHUB_OUTPUT"
+          echo "Found $ALERT_COUNT CodeQL security alerts"
+          
+          if [ "$ALERT_COUNT" -gt 0 ]; then
+            echo "Alert details:"
+            echo "$ALERTS" | jq -r '.[] | "- \(.rule.id): \(.rule.severity) - \(.rule.description)"' 2>/dev/null || echo "Could not parse alerts"
+          fi
+
+      - name: Set scan result
+        id: scan-result
+        if: always()
+        run: |
+          ALERT_COUNT="${{ steps.check-findings.outputs.alert_count }}"
+          
+          if [ "${{ steps.codeql-tool.outcome }}" != "success" ]; then
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            echo "❌ CodeQL scan encountered an error"
+            exit 1
+          elif [ "$ALERT_COUNT" -gt 0 ]; then
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            echo "❌ CodeQL found $ALERT_COUNT security alert(s)"
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              echo "🔍 View findings: https://github.com/${{ github.repository }}/security/code-scanning?query=pr%3A${{ github.event.number }}+tool%3ACodeQL"
+            else
+              echo "🔍 View findings: https://github.com/${{ github.repository }}/security/code-scanning?query=tool%3ACodeQL"
+            fi
+            exit 1
+          else
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            echo "✅ CodeQL scan completed - no security alerts"
+          fi
