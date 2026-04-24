@@ -24,3 +24,4 @@ jobs:
         uses: zizmorcore/zizmor-action@main
         with:
           min-severity: "high"
+          online-audits: "false"  # zizmor hard-crashes on GitHub API errors (impostor-commit, known-vulnerable-actions), see upstream issues #1874 #1252
