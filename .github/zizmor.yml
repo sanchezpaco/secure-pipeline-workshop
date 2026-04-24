@@ -1,0 +1,9 @@
+rules:
+  impostor-commit:
+    # Disabled as a workaround for zizmor crashing with HTTP 403 when the
+    # GitHub compare API refuses large cross-repo diffs (e.g., older tag of
+    # `github/codeql-action` vs a current SHA). See zizmor upstream issue
+    # #1874 / #1252 — zizmor does not gracefully degrade on API errors
+    # for online audits and aborts the entire run. Other online audits
+    # (repojacking, artipacked) remain enabled.
+    disable: true
