@@ -39,7 +39,7 @@ jobs:
             ./code/ || echo "SEMGREP_EXIT_CODE=$?" >> "$GITHUB_ENV"
 
       - name: Upload Semgrep SARIF
-        uses: github/codeql-action/upload-sarif@7fc6561ed893d15cec696e062df840b21db27eb0 # v4.35.2
+        uses: github/codeql-action/upload-sarif@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
         with:
           sarif_file: semgrep-results.sarif
           category: semgrep
