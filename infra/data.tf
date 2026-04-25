@@ -40,3 +40,10 @@ data "aws_lb" "existing" {
 data "aws_lb_target_group" "existing" {
   name = var.target_group_name
 }
+
+data "aws_security_group" "alb" {
+  filter {
+    name   = "tag:Name"
+    values = ["${var.load_balancer_name}-sg"]
+  }
+}

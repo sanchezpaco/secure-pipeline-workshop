@@ -118,29 +118,27 @@ resource "aws_security_group" "ecs_tasks" {
   vpc_id      = data.aws_vpc.existing.id
 
   ingress {
-    description = "HTTP from ALB"
-    from_port   = 3000
-    to_port     = 3000
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTP from ALB"
+    from_port       = 3000
+    to_port         = 3000
+    protocol        = "tcp"
+    security_groups = [data.aws_security_group.alb.id]
   }
 
-  # trivy:ignore:AVD-AWS-0104
   egress {
-    description = "HTTPS outbound"
+    description = "HTTPS outbound (to AWS APIs via VPC endpoints)"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [data.aws_vpc.existing.cidr_block]
   }
 
-  # trivy:ignore:AVD-AWS-0104
   egress {
-    description = "HTTP outbound"
+    description = "HTTP outbound (to AWS APIs via VPC endpoints)"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [data.aws_vpc.existing.cidr_block]
   }
 
   tags = {
