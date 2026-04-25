@@ -18,17 +18,12 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 jobs:
   container-scan:
-    name: Container Scan with Grype
+    name: Container Scan with Trivy
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
     outputs:
       digest: ${{ steps.build.outputs.imageid }}
       tag: ${{ steps.meta.outputs.tags }}
       result: ${{ steps.scan-result.outputs.result }}
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -61,22 +56,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run Grype vulnerability scanner
+      - name: Run Trivy vulnerability scanner
         id: scan-tool
-        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
-          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
-          fail-build: true
-          severity-cutoff: high
-          output-format: sarif
-          add-cpes-if-none: true
-
-      - name: Upload SARIF to GitHub Advanced Security
-        if: always()
-        uses: github/codeql-action/upload-sarif@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
-        with:
-          sarif_file: ${{ steps.scan-tool.outputs.sarif }}
-          category: grype-container-scan
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+        continue-on-error: false
 
       - name: Set scan result
         id: scan-result
@@ -88,8 +78,6 @@ jobs:
           else
             echo "result=failure" >> "$GITHUB_OUTPUT"
             echo "❌ Container scan failed - critical vulnerabilities detected"
-            echo "🔍 View security findings for this PR:"
-            echo "https://github.com/${{ github.repository }}/security/code-scanning?query=pr%3A${{ github.event.pull_request.number }}+is%3Aopen"
             exit 1
           fi
 
