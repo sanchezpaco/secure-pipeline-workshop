@@ -8,9 +8,7 @@
     "build": "echo 'No build needed for simple app'",
     "test": "echo 'No tests configured'"
   },
-  "dependencies": {
-    "lodash": "4.17.21"
-  },
+  "dependencies": {},
   "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
