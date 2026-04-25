@@ -1,4 +1,4 @@
-FROM node:25-alpine
+FROM node:20-alpine
 
 # Bump bundled npm so its tinyglobby > picomatch chain ships >= 4.0.4
 # (fixes GHSA-c2c7-rcm5-vvqj high finding picked up by container scanners).
