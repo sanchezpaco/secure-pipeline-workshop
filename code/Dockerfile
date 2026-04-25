@@ -1,4 +1,9 @@
-FROM node:20-alpine
+FROM node:25-alpine
+
+# Bump bundled npm so its tinyglobby > picomatch chain ships >= 4.0.4
+# (fixes GHSA-c2c7-rcm5-vvqj high finding picked up by container scanners).
+RUN npm install -g npm@11.13.0 && \
+  npm cache clean --force
 
 RUN addgroup -g 1001 -S nodejs && \
   adduser -S nextjs -u 1001 -G nodejs
