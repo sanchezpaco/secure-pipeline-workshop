@@ -31,3 +31,7 @@ jobs:
         uses: zizmorcore/zizmor-action@main
         with:
           min-severity: "high"
+          # Online audits (impostor-commit, repojacking, known-vulnerable-actions, artipacked)
+          # hard-crash the entire run on any GitHub API HTTP error. With github/codeql-action
+          # SHA pins this is deterministic — see zizmor#1252 / #1874.
+          online-audits: "false"
