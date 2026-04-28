@@ -80,10 +80,10 @@ jobs:
         run: |
           if [ "${{ steps.scan-tool.outcome }}" == "success" ]; then
             echo "result=success" >> "$GITHUB_OUTPUT"
-            echo "✅ Container scan passed - no critical vulnerabilities found"
+            echo "✅ Container scan passed - no vulnerabilities at or above the configured severity threshold"
           else
             echo "result=failure" >> "$GITHUB_OUTPUT"
-            echo "❌ Container scan failed - critical vulnerabilities detected"
+            echo "❌ Container scan failed - vulnerabilities at or above the configured severity threshold detected"
             echo "🔍 View security findings for this PR:"
             echo "https://github.com/${{ github.repository }}/security/code-scanning?query=pr%3A${{ github.event.pull_request.number }}+is%3Aopen"
             exit 1
