@@ -17,17 +17,17 @@ on:
         value: ${{ jobs.dast.outputs.result }}
 
 jobs:
-  # 🚧 REPLACE THIS ENTIRE 'jobs:' SECTION WITH WORKSHOP CONTENT! 🚧
-  # Copy from: workshop/dast/{tool}/workflow.yml
+  # 🚧 NOT YET — DAST module is planned but not part of v1 of the workshop.
+  # The workshop/dast/ folder will be added in a future release.
   dast:
-    name: "🚧 DAST - Workshop Placeholder"
+    name: "🚧 DAST - Coming soon"
     runs-on: ubuntu-latest
     outputs:
       result: ${{ steps.placeholder.outputs.result }}
     steps:
-      - name: Workshop Placeholder
+      - name: DAST module not yet shipped
         id: placeholder
         run: |
-          echo "🚧 Replace this job with content from workshop/dast/{tool}/workflow.yml!"
-          echo "This will implement: DAST security testing with your chosen tool"
-          echo "result=workshop-placeholder" >> "$GITHUB_OUTPUT"
+          echo "🚧 DAST is planned for a future workshop iteration."
+          echo "    For now, this job is a no-op placeholder so the orchestrator stays green."
+          echo "result=not-yet-shipped" >> "$GITHUB_OUTPUT"
