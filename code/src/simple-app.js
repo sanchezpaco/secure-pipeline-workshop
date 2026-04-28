@@ -1,7 +1,8 @@
 const http = require('http');
 
-const AWS_ACCESS_KEY_ID = 'AKIA2T2SJH6MS337PDWL'
-const AWS_SECRET_ACCESS_KEY = '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'
+// Use environment variables for secrets — never commit them.
+const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID
+const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY
 
 const PORT = process.env.PORT || 3000;
 
