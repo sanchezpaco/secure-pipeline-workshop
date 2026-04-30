@@ -1,31 +1,21 @@
-name: SAST/SCA Security Analysis
-on:
-  workflow_call:
-    outputs:
-      scan-result:
-        description: "SAST/SCA scan summary"
-        value: ${{ jobs.summary.outputs.result }}
-
-permissions:
-  contents: read
-  security-events: write
-  actions: read
+# =============================================================================
+# OSV-SCANNER CODE SCAN (SCA) JOB
+# =============================================================================
+#
+# osv-scanner queries Google's OSV.dev database — an open-standard
+# vulnerability feed that aggregates GitHub Advisories, RustSec, PyPA,
+# GoVulnDB and more. No NVD dependency, no API keys, lockfile-based.
+# Repository: https://github.com/google/osv-scanner
+#
+# TO USE THIS JOB:
+# 1. Copy this entire job definition into .github/workflows/code-scan.yml
+# 2. Replace the current jobs: definition with this one
+# 3. The job scans ./code for vulnerable libraries
+# 4. The scan will fail if any known vulnerabilities are found
+# =============================================================================
 
 jobs:
-  sast-scan:
-    name: "🚧 SAST Scan - Placeholder"
-    runs-on: ubuntu-latest
-    outputs:
-      result: ${{ steps.placeholder.outputs.result }}
-    steps:
-      - name: Workshop Placeholder
-        id: placeholder
-        run: |
-          echo "🚧 Replace this job with content from workshop/code_scan/sast/{tool}/workflow.yml!"
-          echo "This will implement: SAST scan with your chosen tool"
-          echo "result=workshop-placeholder" >> "$GITHUB_OUTPUT"
-
-  sca-scan:
+  code-scan:
     name: Code Scan with osv-scanner (SCA)
     runs-on: ubuntu-latest
     permissions:
