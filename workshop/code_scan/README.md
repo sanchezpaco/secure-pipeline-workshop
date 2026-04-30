@@ -34,14 +34,24 @@ Malicious actors can exploit vulnerabilities in your code to gain unauthorized a
 
 ## Tools Used in This Module
 
+### SAST tools
+
 - [**CodeQL**](https://github.com/github/codeql) - GitHub's semantic code analysis engine for deep security analysis
   - [GitHub Action](https://github.com/github/codeql-action) | [Documentation](https://codeql.github.com/docs/)
-- [**Semgrep**](https://github.com/semgrep/semgrep) - Fast pattern-based security scanner with extensive rule sets 
+- [**Semgrep**](https://github.com/semgrep/semgrep) - Fast pattern-based security scanner with extensive rule sets
   - [Documentation](https://semgrep.dev/docs/) | [Community Rules](https://semgrep.dev/explore)
-- [**Dependency Check**](https://github.com/dependency-check/DependencyCheck) - OWASP tool for Software Composition Analysis (SCA) to identify known vulnerabilities in dependencies
-  - [GitHub Action](https://github.com/dependency-check/Dependency-Check_Action) | [Documentation](https://jeremylong.github.io/DependencyCheck/)
 
 > **Note**: Different ecosystems have specialized SAST tools (e.g., ESLint with security plugins for JavaScript, Bandit for Python, Brakeman for Ruby on Rails) that can provide more targeted analysis alongside general-purpose scanners.
+
+### SCA tools
+
+These two SCA tools pull vulnerability data from different sources, so the same dependency may surface (or not) depending on the choice. Worth knowing both:
+
+- [**osv-scanner**](https://github.com/google/osv-scanner) - Modern, lockfile-based scanner from Google. Queries [OSV.dev](https://osv.dev/), an open-standard database that aggregates GitHub Advisories, RustSec, PyPA, GoVulnDB and others. No external setup, no API keys, no DB downloads.
+  - [GitHub Action](https://github.com/google/osv-scanner-action) | [Documentation](https://google.github.io/osv-scanner/)
+- [**OWASP Dependency Check**](https://github.com/dependency-check/DependencyCheck) - Long-running OWASP project, focused on identifying known vulnerabilities in declared dependencies. Sources its data from NVD directly.
+  - [GitHub Action](https://github.com/dependency-check/Dependency-Check_Action) | [Documentation](https://jeremylong.github.io/DependencyCheck/)
+  - **Heads up**: since 2024 NVD aggressively rate-limits unauthenticated clients, so without an `NVD_API_KEY` ([request one here](https://nvd.nist.gov/developers/request-an-api-key)) Dependency Check effectively returns 0 findings — a silent false-pass that defeats the point of running it. If you don't want to manage an external key, prefer osv-scanner above.
 
 ## Learning Objectives
 
