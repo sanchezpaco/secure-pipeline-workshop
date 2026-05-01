@@ -1,0 +1,106 @@
+name: Zizmor fix experiment
+
+# Throwaway workflow used on the `zizmor-fix` branch to compare three
+# configurations of `zizmorcore/zizmor-action` against the same workflows.
+# Goal: prove the workshop config silently swallows High-severity findings
+# because `--format=sarif` (set when advanced-security is true) suppresses
+# zizmor's elevated exit codes.
+
+on:
+  push:
+    branches: [zizmor-fix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Config A: the workshop's current setup.
+  # advanced-security defaults to "true" → action passes --format=sarif to
+  # zizmor → zizmor never returns exit codes 11..14, so the action exits 0
+  # even when High-severity findings exist.
+  # Expectation: GREEN (the bug we're investigating).
+  # ---------------------------------------------------------------------------
+  config-a-workshop:
+    name: A — workshop config (SARIF, default)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run zizmor (workshop config)
+        uses: zizmorcore/zizmor-action@main
+        with:
+          min-severity: "high"
+          online-audits: "false"
+
+  # ---------------------------------------------------------------------------
+  # Config B: drop SARIF, use GitHub annotations instead.
+  # advanced-security=false + annotations=true → action does NOT pass
+  # --format=sarif → zizmor uses elevated exit codes (14 for high findings).
+  # Trade-off: no SARIF upload to GHAS Code Scanning UI.
+  # Expectation: RED on any High-severity finding.
+  # ---------------------------------------------------------------------------
+  config-b-annotations:
+    name: B — annotations (no SARIF)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run zizmor (annotations)
+        uses: zizmorcore/zizmor-action@main
+        with:
+          min-severity: "high"
+          online-audits: "false"
+          advanced-security: "false"
+          annotations: "true"
+
+  # ---------------------------------------------------------------------------
+  # Config C: keep SARIF + GHAS upload, but enforce fail-on-findings ourselves.
+  # We let the action upload SARIF (so the Code Scanning UI still works), then
+  # parse the SARIF file referenced by the action's output and exit 1 if any
+  # High+ result is present.
+  # Expectation: RED on High findings; GHAS upload still happens.
+  # ---------------------------------------------------------------------------
+  config-c-sarif-plus-gate:
+    name: C — SARIF + post-gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run zizmor (SARIF)
+        id: zizmor
+        uses: zizmorcore/zizmor-action@main
+        with:
+          min-severity: "high"
+          online-audits: "false"
+      - name: Fail if High+ findings present
+        if: always() && steps.zizmor.outputs.output-file != ''
+        run: |
+          set -euo pipefail
+          sarif="${{ steps.zizmor.outputs.output-file }}"
+          if [ ! -s "$sarif" ]; then
+            echo "ℹ️  No SARIF produced; nothing to gate on."
+            exit 0
+          fi
+          # zizmor stores severity in properties.problem.severity (level field)
+          # plus a custom "zizmor/severity" property. Count any result at all,
+          # since min-severity already filters at zizmor's side.
+          count=$(jq '[.runs[].results[]] | length' "$sarif")
+          echo "Findings at or above min-severity: $count"
+          if [ "$count" -gt 0 ]; then
+            echo "❌ Failing build: zizmor reported $count finding(s) at min-severity=high."
+            exit 1
+          fi
+          echo "✅ No findings at the configured threshold."
