@@ -125,13 +125,13 @@
 ### Tool A — TruffleHog
 
 - **What I did**: Replaced the `jobs:` placeholder in `.github/workflows/secrets-scan.yml` with the snippet from `workshop/secrets_scan/trufflehog/workflow.yml`. Pushed.
-- **Finding(s)**: 1 unverified result — `Detector Type: AWS / Account: 729780141977 / File: code/src/simple-app.js / Line: 4 / Raw result: AKIA2T2SJH6MS337PDWL`. TruffleHog exits 183.
+- **Finding(s)**: 1 unverified result — `Detector Type: AWS / Account: 729780141977 / File: code/src/simple-app.js / Line: 4 / Raw result: AKIA…REDACTED`. TruffleHog exits 183.
 - **Friction**: Very low. The job log prints the detector name, file, and line as a clean ~6-line block, which is the best per-finding output of any tool I exercised. The `--results=verified,unknown,unverified` flag is already wired in (with a clarifying comment) — nice touch, since the workshop's didactic AKIA isn't backed by a real AWS account so it would be silently dropped under the default `verified` filter. Without that flag the build would pass and the bait would never trip.
 - **Fix applied**:
 
   ```diff
-  -const AWS_ACCESS_KEY_ID = 'AKIA2T2SJH6MS337PDWL'
-  -const AWS_SECRET_ACCESS_KEY = 'oMKFrMwcYIJB/PU7l2EOG8wg9KOfQapwVKGP4HaD'
+  -const AWS_ACCESS_KEY_ID = 'AKIA…REDACTED'
+  -const AWS_SECRET_ACCESS_KEY = '[redacted-40-char-secret]'
   +const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
   +const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
   ```
