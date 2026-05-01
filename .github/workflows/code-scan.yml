@@ -1,10 +1,6 @@
 name: SAST/SCA Security Analysis
 on:
   workflow_call:
-    outputs:
-      scan-result:
-        description: "SAST/SCA scan summary"
-        value: ${{ jobs.summary.outputs.result }}
 
 permissions:
   contents: read
