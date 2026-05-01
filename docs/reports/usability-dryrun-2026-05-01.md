@@ -160,7 +160,49 @@
 
 ## Module 4 — Container Security Scanning
 
-_(pending)_
+### Tool A — Trivy
+
+- **What I did**: Replaced the `jobs:` placeholder in `.github/workflows/build-and-container-scan.yml` with the snippet from `workshop/container_scan/trivy/workflow.yml`. Pushed.
+- **Finding(s)**: Trivy reports two tables:
+  - **OS layer** (alpine 3.19.4): `musl` + `musl-utils` — 4 HIGH (CVE-2025-26519, CVE-2026-40200).
+  - **Application layer** (`axios (package.json)` 1.6.0): 4 HIGH — CVE-2024-39338 (SSRF), CVE-2025-27152 (SSRF + cred leak), CVE-2025-58754 (DoS), CVE-2026-25639 (proto-key DoS).
+- **Friction**: My **first fix attempt** (bump `node:20-alpine3.19` → `node:20-alpine3.21`) made it worse — alpine 3.21 ships openssl 3.3.5-r0 which has unpatched CVEs (`libcrypto3`/`libssl3` HIGH+CRITICAL). Total went from 8 to 19 findings. The actual fix is to jump major: **`node:25-alpine`** (current alpine, current node, current openssl). I would NOT have figured that out without running CI twice and reading the openssl line in the second failure — a fresh attendee will hit this same wall and assume "I picked the right alpine" was the right move. The README needs to call out: *don't bump alpine minor, jump to current node-major + alpine.*
+- **Fix applied**:
+
+  ```diff
+  -FROM node:20-alpine3.19
+  +FROM node:25-alpine
+  ```
+
+  ```diff
+  -    "axios": "1.6.0"
+  +    "axios": "1.13.5"
+  ```
+
+  Plus regenerated `package-lock.json` (`rm -f package-lock.json && npm install --package-lock-only`) — required because the snippet does `npm ci`, which fails if the lock file is out of sync with `package.json`.
+
+- **README hint to add**: *"Trivy reports OS-layer + application-layer vulnerabilities. The bait combines both: alpine 3.19 has unfixed `musl` HIGHs and the `axios@1.6.0` dep has 4 HIGH CVEs (SSRF, DoS, cred leak). Fix: bump base image to `node:25-alpine` (don't just bump alpine minor — 3.21 still has openssl HIGHs); bump `axios` to `1.13.5`; regenerate `package-lock.json` so `npm ci` doesn't fail."*
+- **Time**: ~25 min round-trip (build+scan ~5 min × 3 attempts: bait, wrong-fix, right-fix).
+
+### Tool B — Grype
+
+- **Rollback**: Reverted both Trivy fix commits to restore Dockerfile + axios bait.
+- **What I did**: Replaced the `jobs:` block with the snippet from `workshop/container_scan/grype/workflow.yml`. Pushed.
+- **Finding(s)**: 1 line of useful output — `[0030] ERROR discovered vulnerabilities at or above the severity threshold` plus a helpful warning: `188 packages from EOL distro "alpine 3.19.4" - vulnerability data may be incomplete or outdated; consider upgrading to a supported version`. Grype writes the SARIF and uploads it; the actual CVE list lives in the GHAS Code Scanning tab, which is **invisible on a fork without GHAS** and useless without a SARIF artifact.
+- **Friction**: High. Compared to Trivy's two-table CVE breakdown, Grype's CLI output here is one error line with no details. Without the EOL warning I would have had no clue what to fix. The snippet should either:
+  - add `output-format: table` (or run `grype` a second time in plain output) so the CVE list is visible in the job log; or
+  - upload the SARIF as an `actions/upload-artifact` so it's downloadable from the run page.
+- **Fix applied**: Same as Trivy (`node:25-alpine` + axios 1.13.5 + lock regen). One commit, no second attempt needed because by now I knew the playbook from the Trivy round.
+- **README hint to add**: *"Grype's job log is sparse — only `discovered vulnerabilities at or above the severity threshold` and an EOL hint. To see the actual CVEs, either add `output-format: table` (Grype prints to stdout), upload the SARIF as an artifact, or read the GHAS Code Scanning tab. The fix is identical to Trivy's: bump base to `node:25-alpine` and `axios` to `1.13.5`, then regenerate `package-lock.json`."*
+- **Time**: ~6 min — fast because the fix was already known.
+
+### Module-level observations
+
+- **Convergence**: Both tools fail on the same root causes (EOL alpine + unfixed axios), so a single fix clears both. Grype is just less verbose about *which* CVEs it found. Convergence: 5/5.
+- **Smoother attendee experience**: **Trivy by a wide margin**. Trivy's tabular output with library/CVE/severity/installed/fixed/title is genuinely actionable — an attendee can read it, copy the fixed version, and go. Grype dumped a single error line and a SARIF blob.
+- **Major usability gap (cross-module)**: The `axios@1.6.0` bait is an **SCA finding** (vulnerable dependency in `package.json`), not a container finding. It belongs in Module 2's SCA slot — but the brief said "skip dependency-check (NVD key)" and didn't replace it with `osv-scanner`, so the slot stayed as a placeholder that exits 0. Result: the axios bait leaks past the SAST scanners (which by design only look at code patterns) and shows up in Module 4 alongside the OS-level CVEs, mixing two didactic categories. **A run of `osv-scanner` in Module 2 would catch axios there, where it belongs.** I plan to plug `osv-scanner` into Module 2 after this module to demonstrate the proper module-level isolation.
+- **Lock-file footgun**: `npm ci` requires `package.json` and `package-lock.json` to be in sync. Bumping axios in `package.json` alone breaks the build with `EUSAGE` before any scan runs — the README needs to say "after bumping a dep, run `npm install` (or `npm install --package-lock-only`) to regen the lock file, then commit both."
+
 
 ## Module 5 — IaC Security Scan
 
