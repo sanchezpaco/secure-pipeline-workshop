@@ -122,7 +122,41 @@
 
 ## Module 3 — Secrets Scan
 
-_(pending)_
+### Tool A — TruffleHog
+
+- **What I did**: Replaced the `jobs:` placeholder in `.github/workflows/secrets-scan.yml` with the snippet from `workshop/secrets_scan/trufflehog/workflow.yml`. Pushed.
+- **Finding(s)**: 1 unverified result — `Detector Type: AWS / Account: 729780141977 / File: code/src/simple-app.js / Line: 4 / Raw result: AKIA2T2SJH6MS337PDWL`. TruffleHog exits 183.
+- **Friction**: Very low. The job log prints the detector name, file, and line as a clean ~6-line block, which is the best per-finding output of any tool I exercised. The `--results=verified,unknown,unverified` flag is already wired in (with a clarifying comment) — nice touch, since the workshop's didactic AKIA isn't backed by a real AWS account so it would be silently dropped under the default `verified` filter. Without that flag the build would pass and the bait would never trip.
+- **Fix applied**:
+
+  ```diff
+  -const AWS_ACCESS_KEY_ID = 'AKIA2T2SJH6MS337PDWL'
+  -const AWS_SECRET_ACCESS_KEY = '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'
+  +const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
+  +const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+  ```
+
+- **README hint to add**: *"TruffleHog finds the hardcoded AWS access key at `code/src/simple-app.js:4`. Replace `const AWS_ACCESS_KEY_ID = 'AKIA…'` with `process.env.AWS_ACCESS_KEY_ID` (and the secret, mutatis mutandis). The snippet uses `--results=verified,unknown,unverified` on purpose: the workshop's AKIA is invalid, so the default `verified`-only filter would silently pass."*
+- **Time**: ~2 min.
+
+### Tool B — Gitleaks
+
+- **Rollback**: `git revert` of the TruffleHog fix commit; the AWS keys are back in `simple-app.js`. Then I rewrote `.github/workflows/secrets-scan.yml` with the Gitleaks snippet.
+- **What I did**: Pasted snippet from `workshop/secrets_scan/gitleaks/workflow.yml` into the workflow. Pushed.
+- **Finding(s)**: 2 leaks:
+  1. `aws-access-token` at `code/src/simple-app.js:4` (the `AKIA…` literal).
+  2. `generic-api-key` at `code/src/simple-app.js:5` (high-entropy match on the secret access key).
+- **Friction**: Low-to-medium. Output is rich (`Finding | Secret | RuleID | Entropy | File | Line | Fingerprint`) but mixed with a long `wget` progress dump (because the snippet shells out instead of using the `gitleaks/gitleaks-action`). The progress noise pushes the actual finding far down the log; on a small terminal you scroll past it. The `--no-git` mode has a clarifying comment (OPTION 1 vs OPTION 2) — that's helpful, but the comment is twice as long as the actual command and could be a one-liner.
+- **Fix applied**: Same diff as TruffleHog (lines 4-5 → `process.env.*`). One fix clears both Gitleaks rules.
+- **README hint to add**: *"Gitleaks reports the access-key and secret-key as two separate findings (`aws-access-token` and `generic-api-key`). Both are fixed by the same edit at `simple-app.js:4-5` — move the literals to `process.env.*`. Heads up: the `wget` install pollutes the log with a progress bar; either pipe it to `-q` or switch to `gitleaks/gitleaks-action@<sha>`."*
+- **Time**: ~3 min.
+
+### Module-level observations
+
+- **Convergence**: Both tools flag the same bait (the hardcoded AWS keys at lines 4-5), so attendees see consistent results. TruffleHog only fires on the access-key (`AKIA…`); Gitleaks fires on both the access-key and the secret-key. Good enough convergence — same root cause, same one-edit fix. Convergence: 5/5.
+- **Smoother attendee experience**: TruffleHog. Single finding, clean tabular output, no install noise. Gitleaks's findings table is also great, but the noisy `wget` install hides the signal in a 200-line log.
+- **Snippet hygiene**: TruffleHog's snippet had to be patched (the comment on `--results=...` confirms this — it explains *why* unverified is included). Both snippets could lose 5–10 lines of comments and become more attendee-friendly.
+
 
 ## Module 4 — Container Security Scanning
 
