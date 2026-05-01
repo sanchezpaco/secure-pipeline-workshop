@@ -16,64 +16,77 @@ jobs:
   codeql-scan:
     name: CodeQL SAST Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
     outputs:
       result: ${{ steps.scan-result.outputs.result }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Initialize CodeQL
+      - name: Initialize CodeQL toolchain
         uses: github/codeql-action/init@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
         with:
           languages: javascript
 
-      - name: Perform CodeQL Analysis
-        id: codeql-tool
-        uses: github/codeql-action/analyze@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
+      - name: Add codeql to PATH
+        run: find "$RUNNER_TOOL_CACHE/CodeQL" -name codeql -type f -printf '%h\n' -quit >> "$GITHUB_PATH"
 
-      - name: Wait for GitHub to process results
-        run: sleep 30
-
-      - name: Check for CodeQL security alerts
-        id: check-findings
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build CodeQL database
         run: |
-          # Use gh CLI to check for code scanning alerts
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            ALERTS=$(gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&pr=${{ github.event.number }}&tool_name=CodeQL" 2>/dev/null || echo "[]")
+          codeql database create codeql-db \
+            --language=javascript \
+            --source-root=.
+
+      - name: Run CodeQL analysis
+        id: codeql-tool
+        run: |
+          mkdir -p codeql-results
+          codeql database analyze codeql-db \
+            --format=sarif-latest \
+            --output=codeql-results/javascript.sarif \
+            codeql/javascript-queries:codeql-suites/javascript-security-extended.qls
+
+      - name: Summarize findings
+        if: always() && hashFiles('codeql-results/*.sarif') != ''
+        run: |
+          COUNT=$(jq '[.runs[].results[]] | length' codeql-results/*.sarif | awk '{s+=$1} END {print s}')
+          if [ "${COUNT:-0}" -eq 0 ]; then
+            echo "✅ No security alerts"
           else
-            ALERTS=$(gh api "repos/${{ github.repository }}/code-scanning/alerts?state=open&tool_name=CodeQL" 2>/dev/null || echo "[]")
+            echo "❌ Found $COUNT CodeQL finding(s):"
+            jq -r '.runs[].results[] |
+              "  - \(.ruleId) | \(.message.text)\n      \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 1)"' \
+              codeql-results/*.sarif
           fi
-          
-          ALERT_COUNT=$(echo "$ALERTS" | jq '. | length' 2>/dev/null || echo "0")
-          
-          echo "alert_count=$ALERT_COUNT" >> "$GITHUB_OUTPUT"
-          echo "Found $ALERT_COUNT CodeQL security alerts"
-          
-          if [ "$ALERT_COUNT" -gt 0 ]; then
-            echo "Alert details:"
-            echo "$ALERTS" | jq -r '.[] | "- \(.rule.id): \(.rule.severity) - \(.rule.description)"' 2>/dev/null || echo "Could not parse alerts"
-          fi
+
+      - name: Upload SARIF to GitHub Advanced Security
+        if: always() && hashFiles('codeql-results/*.sarif') != ''
+        uses: github/codeql-action/upload-sarif@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
+        with:
+          sarif_file: codeql-results
+          category: codeql
 
       - name: Set scan result
         id: scan-result
         if: always()
         run: |
-          ALERT_COUNT="${{ steps.check-findings.outputs.alert_count }}"
-          
           if [ "${{ steps.codeql-tool.outcome }}" != "success" ]; then
             echo "result=failure" >> "$GITHUB_OUTPUT"
             echo "❌ CodeQL scan encountered an error"
             exit 1
-          elif [ "$ALERT_COUNT" -gt 0 ]; then
+          fi
+          if ! ls codeql-results/*.sarif >/dev/null 2>&1; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            echo "✅ CodeQL scan completed - no SARIF produced (no findings)"
+            exit 0
+          fi
+          COUNT=$(jq '[.runs[].results[]] | length' codeql-results/*.sarif | awk '{s+=$1} END {print s}')
+          if [ "${COUNT:-0}" -gt 0 ]; then
             echo "result=failure" >> "$GITHUB_OUTPUT"
-            echo "❌ CodeQL found $ALERT_COUNT security alert(s)"
-            if [ "${{ github.event_name }}" == "pull_request" ]; then
-              echo "🔍 View findings: https://github.com/${{ github.repository }}/security/code-scanning?query=pr%3A${{ github.event.number }}+tool%3ACodeQL"
-            else
-              echo "🔍 View findings: https://github.com/${{ github.repository }}/security/code-scanning?query=tool%3ACodeQL"
-            fi
+            echo "❌ CodeQL found $COUNT security alert(s)"
             exit 1
           else
             echo "result=success" >> "$GITHUB_OUTPUT"

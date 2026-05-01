@@ -31,3 +31,6 @@ jobs:
         uses: zizmorcore/zizmor-action@main
         with:
           min-severity: "high"
+          # Disable online audits — they hard-crash the run on any GitHub API HTTP error
+          # (see zizmor#1252 / #1874).
+          online-audits: "false"

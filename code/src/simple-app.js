@@ -1,4 +1,5 @@
 const http = require('http');
+const axios = require('axios');
 
 const AWS_ACCESS_KEY_ID = 'AKIA2T2SJH6MS337PDWL'
 const AWS_SECRET_ACCESS_KEY = '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'
@@ -78,6 +79,31 @@ const server = http.createServer((req, res) => {
       </body>
       </html>
     `);
+  } else if (url === '/fetch' && method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      let targetUrl;
+      try {
+        ({ url: targetUrl } = JSON.parse(body));
+      } catch {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+      if (!targetUrl) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'No url provided' }));
+      }
+      try {
+        // TODO: validate URL allow-list before fetching to prevent SSRF
+        const { status, data } = await axios.get(targetUrl);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status, data }));
+      } catch (err) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    });
   } else if (url === '/data' && method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({

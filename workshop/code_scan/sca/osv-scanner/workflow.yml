@@ -1,0 +1,73 @@
+# =============================================================================
+# OSV-SCANNER CODE SCAN (SCA) JOB
+# =============================================================================
+#
+# osv-scanner is a vulnerability scanner for project dependencies, backed
+# by the OSV.dev database.
+# Repository: https://github.com/google/osv-scanner
+#
+# TO USE THIS JOB:
+# 1. Copy this entire job definition into .github/workflows/code-scan.yml
+# 2. Replace the current jobs: definition with this one
+# 3. The job scans ./code for vulnerable libraries
+# 4. The scan will fail if any known vulnerabilities are found
+# =============================================================================
+
+jobs:
+  code-scan:
+    name: Code Scan with osv-scanner (SCA)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    outputs:
+      result: ${{ steps.scan-result.outputs.result }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run osv-scanner
+        id: scan-tool
+        uses: google/osv-scanner-action/osv-scanner-action@c51854704019a247608d928f370c98740469d4b5 # v2.3.5
+        with:
+          scan-args: |-
+            --recursive
+            --format=sarif
+            --output-file=osv-scanner.sarif
+            ./code
+
+      - name: Summarize findings
+        if: always() && hashFiles('osv-scanner.sarif') != ''
+        run: |
+          COUNT=$(jq '[.runs[].results[]] | length' osv-scanner.sarif)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "✅ No vulnerabilities found"
+          else
+            echo "❌ Found $COUNT vulnerability finding(s):"
+            jq -r '.runs[].results[] |
+              "  - \(.ruleId) | \(.message.text)\n      \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 1)"' \
+              osv-scanner.sarif
+          fi
+
+      - name: Upload SARIF to GitHub Advanced Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
+        with:
+          sarif_file: osv-scanner.sarif
+          category: osv-scanner-sca
+
+      - name: Set scan result
+        id: scan-result
+        if: always()
+        run: |
+          if [ "${{ steps.scan-tool.outcome }}" == "success" ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            echo "✅ Code scan passed - no vulnerabilities found"
+          else
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            echo "❌ Code scan failed - vulnerabilities detected"
+            exit 1
+          fi

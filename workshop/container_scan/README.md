@@ -37,6 +37,13 @@ By the end of this module, you will:
 - Understand supply chain security for containers
 - [🔜] Identify Dockerfile security best practices
 
+> [!TIP]
+> **A clean scan can take more than one fix.** Bumping the base image
+> clears OS-package and language-runtime CVEs, but transitive dependencies
+> bundled inside the new image (e.g., libraries shipped with the global
+> package manager) may still surface as HIGH findings. Expect to fix in
+> layers — re-run the scanner between each change to see what's left.
+
 ## Security Checklist
 
 - [ ] **Use minimal, trusted base images** and rebuild them regularly.
