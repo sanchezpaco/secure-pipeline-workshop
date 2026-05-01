@@ -29,7 +29,7 @@ jobs:
         uses: github/codeql-action/init@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
         with:
           languages: javascript
-          queries: security-extended
+          queries: +security-and-quality
           source-root: code
 
       - name: Run CodeQL analysis
