@@ -234,7 +234,47 @@
 
 ## Module 5 — IaC Security Scan
 
-_(pending)_
+### Tool A — Checkov
+
+- **What I did**: Replaced the `jobs:` placeholder in `.github/workflows/iac-scan.yml` with the snippet from `workshop/iac_scan/checkov/workflow.yml`. Pushed.
+- **Finding(s)**: `Passed checks: 18, Failed checks: 1` — `CKV_AWS_24: Ensure no security groups allow ingress from 0.0.0.0:0 to port 22` on `aws_security_group.ecs_tasks` at `infra/main.tf:115-149`. The bait is on lines 120-126: an ingress rule with `description = "HTTP from ALB"` but `from_port/to_port = 22` — a classic copy-paste/typo bait where the description says one thing and the ports say another.
+- **Friction**: Very low. With `quiet: true`, Checkov only prints failed checks plus the summary line (18 passed / 1 failed). The output names the rule, the resource, the file, the line range, and quotes the offending lines (`125 | cidr_blocks = ["0.0.0.0/0"]` etc.). This is the gold standard for IaC scanner UX. The README of `infra/main.tf` even leaves a kindly SRE note above the security group: `if you need to reference the VPC CIDR use this data: data.aws_vpc.existing.cidr_block` — exactly the helper for the fix. Excellent signposting.
+- **Fix applied**:
+
+  ```diff
+     ingress {
+  -    description = "HTTP from ALB"
+  -    from_port   = 22
+  -    to_port     = 22
+  +    description = "HTTP from ALB (workshop)"
+  +    from_port   = 3000
+  +    to_port     = 3000
+       protocol    = "tcp"
+  -    cidr_blocks = ["0.0.0.0/0"]
+  +    cidr_blocks = [data.aws_vpc.existing.cidr_block]
+     }
+  ```
+
+- **README hint to add**: *"Checkov flags `CKV_AWS_24` on `aws_security_group.ecs_tasks` at `infra/main.tf:120-126` — port 22 ingress from `0.0.0.0/0` despite a `description = \"HTTP from ALB\"`. Fix the port to the app's actual port (3000) and tighten the CIDR to the VPC range using `data.aws_vpc.existing.cidr_block` (the SRE note above the resource literally hands you this)."*
+- **Time**: ~3 min.
+
+### Tool B — Trivy IaC
+
+- **Rollback**: `git revert` of the Checkov fix commit; the SSH-from-anywhere bait is back in `main.tf`. Then I rewrote `iac-scan.yml` with the Trivy IaC snippet.
+- **What I did**: Pasted snippet from `workshop/iac_scan/trivy/workflow.yml`. Pushed.
+- **Finding(s)**: Trivy IaC writes findings to `trivy-results.sarif` and uploads to GHAS. The job log shows only `Running Trivy with options: trivy config infra/` followed by `Successfully uploaded results` — **no AVD ID, no rule, no file/line in the log**. To see the actual finding I'd need either GHAS access (private/fork limitation) or to download the SARIF artifact (snippet doesn't upload one). I had to assume the bait was the same `CKV_AWS_24`-class issue Checkov caught (Trivy's equivalent rule is `AVD-AWS-0107`, "Open ingress to port 22 from 0.0.0.0/0").
+- **Friction**: High — same root cause as Grype's CLI in Module 4. The snippet uses `format: 'sarif'`, which suppresses Trivy's normally-excellent table output. Two clean fixes:
+  - Change `format` to `table` (and have a separate run for SARIF if you want GHAS upload), or
+  - Add `actions/upload-artifact` for `trivy-results.sarif` so the file is downloadable from the run page.
+- **Fix applied**: Same diff as Checkov (port 22 → 3000, CIDR → VPC). One edit clears both scanners.
+- **README hint to add**: *"Trivy IaC's snippet writes only SARIF — the job log shows no findings, just an upload-success line. Either add `format: table` (sacrifice GHAS upload) or upload the SARIF as an artifact via `actions/upload-artifact`. The bait is the same `infra/main.tf:120-126` block Checkov flags; Trivy's rule ID is `AVD-AWS-0107`."*
+- **Time**: ~3 min — fast because the fix was already known from Checkov.
+
+### Module-level observations
+
+- **Convergence**: 5/5. Both tools converge on the same single bait (port-22 ingress from `0.0.0.0/0`). One edit, both scanners green. The other infra patterns that *could* be misconfigurations (CloudWatch retention, KMS encryption, etc.) are deliberately wired to be safe — clean module isolation.
+- **Smoother experience**: **Checkov by a wide margin**, again because of snippet output. Checkov prints rule ID + resource + file + line + offending lines all in the job log. Trivy IaC writes a SARIF and goes silent. The Trivy snippet should either switch to `format: table` for the workshop or upload the SARIF as a downloadable artifact.
+- **Snippet asymmetry across modules**: Trivy *as a container scanner* (Module 4) prints a great table to stdout. Trivy *as an IaC scanner* (Module 5) is configured for SARIF-only. Same tool, opposite UX in the two snippets — this is a snippet-author choice, not a tool limitation. Aligning them would help.
 
 ## Modules not executed (static observations)
 
