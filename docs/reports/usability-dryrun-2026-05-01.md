@@ -113,11 +113,39 @@
 - **README hint to add**: *"Semgrep's job log only prints a finding count. To see the rule, either (a) add a `--text` summary alongside `--sarif`, (b) drop `--sarif`/`--output` so Semgrep prints findings to stdout, or (c) upload `semgrep-results.sarif` as an artifact via `actions/upload-artifact`. The bait is the same `exec(\`cat "${filePath}"\`)` line — Semgrep flags it via `javascript.lang.security.audit.detect-child-process` in the `p/security-audit` ruleset."*
 - **Time**: ~6 min (Semgrep itself runs in ~3 s; install + checkout dominates).
 
+### Tool C — osv-scanner (SCA addendum)
+
+> Re-opened Module 2 after Module 4 because the axios bait was leaking into the container scan. SCA is the right place for it.
+
+- **What I did**: Reverted `code/package.json` axios from `1.13.5` back to `1.6.0` (and regenerated `code/package-lock.json` with `npm install --package-lock-only --ignore-scripts`) to restore the SCA bait. Added a second job (`sca-scan`) to `.github/workflows/code-scan.yml` from `workshop/code_scan/sca/osv-scanner/workflow.yml`, alongside the Semgrep job.
+- **Finding(s)**: 6 vulnerability findings, all on `axios@1.6.0`:
+  - `CVE-2025-62718` (GHSA-3p68-rc4w-qgx5)
+  - `CVE-2026-25639` (GHSA-43fc-jf86-j433) — proto-key DoS
+  - `CVE-2025-58754` (GHSA-4hjh-wcwx-xvwj) — DoS
+  - `CVE-2024-39338` (GHSA-8hc4-vh64-cxmj) — SSRF
+  - `CVE-2026-40175` (GHSA-fvcv-3m26-pcqx)
+  - `CVE-2025-27152` (GHSA-jr5f-v2jv-69x6) — SSRF + cred leak
+  - **2 more than Trivy found in Module 4** (Trivy listed 4; osv-scanner adds CVE-2025-62718 and CVE-2026-40175). osv-scanner's database is more complete for application-layer deps.
+- **Friction**: Medium. The snippet's "Summarize findings" step prints `ruleId | message | path:line` — same friendly format as the CodeQL snippet (this should be the template for *all* SAST/SCA snippets). But: bumping `axios` to `1.13.5` (the version Trivy's table told me was "fixed" in Module 4) was **not enough** — `osv-scanner` still flagged 2 unfixed CVEs (CVE-2025-62718, CVE-2026-40175). Trivy's "Fixed Version" column shows the fix for *that specific CVE*; it does not promise the version is clean of all CVEs in the OSV DB. I had to bump again to **`axios@1.15.2`** to go green — same pattern as Module 4 (alpine 3.21 wasn't enough; needed `node:25-alpine`).
+- **Fix applied** (two pushes):
+
+  ```diff
+  -    "axios": "1.6.0"
+  +    "axios": "1.15.2"
+  ```
+
+  Plus regenerated `package-lock.json` after each bump.
+
+- **README hint to add**: *"`osv-scanner` finds 6 CVEs on `axios@1.6.0` (more than Trivy's library scanner finds in Module 4 — OSV's app-layer DB is denser). Bump `axios` to a recent patched version (`1.15.2` was clean at run time; check `npm view axios versions` for the latest). After bumping, run `npm install --package-lock-only` to regen the lockfile. **Heads-up**: Trivy's 'Fixed Version' column is per-CVE, not per-package — bumping to the version Trivy listed (e.g. `1.13.5`) may still leave you with later CVEs."*
+- **Time**: ~7 min round-trip across two attempts.
+
 ### Module-level observations
 
-- **Convergence**: Both tools converge on the same root bait (`exec` with user-controlled string). They both ignore the hardcoded AWS keys at `simple-app.js:4-5` (Semgrep's `p/security-audit` doesn't include the AWS-key rule by default; CodeQL's javascript-security-extended doesn't either) — those are reserved for the secrets module, which is correct module separation. Convergence: 5/5.
-- **Smoother experience**: CodeQL by a wide margin, *because of the snippet*, not the tool. The CodeQL snippet has a custom `Summarize findings` step that prints `ruleId | message | path:line`. The Semgrep snippet doesn't — it dumps to SARIF and stops. Same scanner output, vastly different attendee experience. The Semgrep snippet should adopt the same summary pattern.
-- **Discoverability gap**: Neither module README mentions which line of `code/src/simple-app.js` is the planted bait. The `// TODO: Tech debt - should use fs.readFile…` comment in the source IS the hint, but readers find it only after the scan fails — a one-line README pointer ("look in `/readfile`") would save a confused attendee 2-3 minutes.
+- **Convergence (SAST)**: CodeQL and Semgrep both converge on the same `exec(...)` bait. They both ignore the hardcoded AWS keys at `simple-app.js:4-5` (Semgrep's `p/security-audit` doesn't include the AWS-key rule by default; CodeQL's javascript-security-extended doesn't either) — those are reserved for the secrets module, which is correct module separation. Convergence: 5/5.
+- **Convergence (SCA → container)**: `osv-scanner` and Trivy's library scanner both find axios CVEs, but `osv-scanner` is denser (6 vs Trivy's 4). The intended layering is: SCA in Module 2 catches it; container scan in Module 4 should be a backstop, not the primary detector. The bait was correctly placed — the gap was the workshop flow, not the tool selection.
+- **Smoother experience (SAST)**: CodeQL by a wide margin, *because of the snippet*, not the tool. The CodeQL snippet has a custom `Summarize findings` step that prints `ruleId | message | path:line`. The Semgrep snippet doesn't — it dumps to SARIF and stops. Same scanner output, vastly different attendee experience. The Semgrep snippet should adopt the same summary pattern. The `osv-scanner` snippet *already* has the right pattern.
+- **Discoverability gap**: Neither module README mentions which line of `code/src/simple-app.js` is the planted SAST bait. The `// TODO: Tech debt - should use fs.readFile…` comment in the source IS the hint, but readers find it only after the scan fails — a one-line README pointer ("look in `/readfile`") would save a confused attendee 2-3 minutes. Same applies to SCA: the README should call out `axios@1.6.0` in `package.json`.
+- **Module-flow gap**: The Module 2 brief said "skip dependency-check (NVD key)" without saying "use osv-scanner instead." If an attendee follows the brief literally, the SCA slot stays as a placeholder, and the axios bait leaks past Module 2 into the container scan in Module 4 — mixing SCA findings and OS-layer findings into the same noisy log. **The brief should mandate `osv-scanner` for the SCA slot.**
 
 
 ## Module 3 — Secrets Scan
