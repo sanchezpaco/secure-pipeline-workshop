@@ -17,14 +17,13 @@ The workshop is organized into different modules, each focusing on a specific as
 
 ## 📚 Workshop Modules
 
-### 0. 🐦‍🔥 [Introduction](workshop/)
-Workshop introduction.
+> 🐦‍🔥 New here? Start with the [workshop introduction](workshop/) for context on shift-left and CI/CD/CS.
 
-### 1. 🔍 [Pipeline Security Scan](workshop/pipeline_scan/)
-Learn to scan CI/CD pipelines for security misconfigurations and vulnerabilities.
+### 1. 🛡️ [Pipeline Security Scan](workshop/pipeline_scan/)
+Detect insecure GitHub Actions patterns: unpinned actions, excessive permissions, untrusted authors.
 
 ### 2. 🔬 [Code Security Analysis](workshop/code_scan/)
-Implement SAST (Static Application Security Testing) and SCA (Software Composition Analysis).
+Find vulnerabilities in your application code (SAST) and in its dependencies (SCA).
 
 ### 3. 🔐 [Secrets Scan](workshop/secrets_scan/)
 Detect and prevent exposure of credentials and sensitive information.
@@ -32,15 +31,14 @@ Detect and prevent exposure of credentials and sensitive information.
 ### 4. 🐳 [Container Security Scanning](workshop/container_scan/)
 Scan Docker images for vulnerabilities and misconfigurations.
 
-### 5. 🏗️ [Infrastructure Security Scan](workshop/iac_scan/)
-Analyze Infrastructure as Code for security issues.
+### 5. 🏗️ [Infrastructure as Code (IaC) Security Scan](workshop/iac_scan/)
+Analyze Terraform and other IaC definitions for security issues before they are deployed.
 
-### 6. 🔍 [Runtime Infrastructure Scan](workshop/runtime_infra_scan/)
-Scan the "real" infrastructure for vulnerabilities.
+### 6. ☁️ [Runtime Infrastructure Scan (live cloud)](workshop/runtime_infra_scan/)
+Scan a live AWS account for misconfigurations and drift that static IaC scans can't catch.
 
-### Bonus Tracks
-#### 🤖 [AI Security Analysis](workshop/ai_scan/)
-Leverage artificial intelligence for comprehensive security reviews and intelligent vulnerability detection.
+### 7. 🤖 [AI Security Analysis](workshop/ai_scan/) *(optional)*
+Leverage AI to perform comprehensive, context-aware security reviews of pull requests.
 
 
 ## 🚀 Getting Started
