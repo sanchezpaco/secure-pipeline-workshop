@@ -36,7 +36,17 @@ jobs:
           # (see zizmor#1252 / #1874).
           online-audits: "false"
 
-      - name: Fail on findings
-        if: always()
+      - name: Summarize findings
+        if: always() && steps.zizmor.outputs.output-file != ''
         run: |
-          test "$(jq '[.runs[].results[]] | length' "${{ steps.zizmor.outputs.output-file }}")" -eq 0
+          SARIF="${{ steps.zizmor.outputs.output-file }}"
+          COUNT=$(jq '[.runs[].results[]] | length' "$SARIF")
+          if [ "${COUNT:-0}" -eq 0 ]; then
+            echo "✅ No security alerts"
+          else
+            echo "❌ Found $COUNT zizmor finding(s):"
+            jq -r '.runs[].results[] |
+              "  - \(.ruleId) | \(.message.text)\n      \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 1)"' \
+              "$SARIF"
+            exit 1
+          fi
