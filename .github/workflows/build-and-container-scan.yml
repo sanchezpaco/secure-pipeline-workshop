@@ -3,39 +3,156 @@ name: Build and Scan Application
 on:
   workflow_call:
     outputs:
-      image-digest:
-        description: "Built image digest"
-        value: ${{ jobs.build-and-container-scan.outputs.digest }}
-      image-tag:
-        description: "Built image tag"
-        value: ${{ jobs.build-and-container-scan.outputs.tag }}
       scan-result:
-        description: "Container scan result"
-        value: ${{ jobs.build-and-container-scan.outputs.scan-result }}
+        description: "Container scan summary"
+        value: ${{ jobs.summary.outputs.result }}
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # 🚧 REPLACE THIS ENTIRE 'jobs:' SECTION WITH WORKSHOP CONTENT! 🚧
-  # Copy from: workshop/container_scan/{tool}/workflow.yml
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build.outputs.imageid }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-  build-and-container-scan:
-    name: "🚧 Build and Container Scan - Workshop Placeholder"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+
+      - name: Build Docker image (export tar)
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: ./code
+          platforms: linux/amd64
+          push: false
+          outputs: type=docker,dest=/tmp/image.tar
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Upload image tar
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-image
+          path: /tmp/image.tar
+          retention-days: 1
+
+  trivy:
+    name: Trivy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    outputs:
+      result: ${{ steps.scan-result.outputs.result }}
+    steps:
+      - name: Download image
+        uses: actions/download-artifact@v4
+        with:
+          name: container-image
+          path: /tmp
+      - name: Load image
+        run: docker load -i /tmp/image.tar
+      - name: Run Trivy
+        id: scan-tool
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ${{ needs.build.outputs.image-tag }}
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+        continue-on-error: false
+      - name: Set scan result
+        id: scan-result
+        if: always()
+        run: |
+          if [ "${{ steps.scan-tool.outcome }}" == "success" ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            echo "✅ Trivy passed"
+          else
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            echo "❌ Trivy failed"
+            exit 1
+          fi
+
+  grype:
+    name: Grype
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    outputs:
+      result: ${{ steps.scan-result.outputs.result }}
+    steps:
+      - name: Download image
+        uses: actions/download-artifact@v4
+        with:
+          name: container-image
+          path: /tmp
+      - name: Load image
+        run: docker load -i /tmp/image.tar
+      - name: Run Grype
+        id: scan-tool
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: ${{ needs.build.outputs.image-tag }}
+          fail-build: true
+          severity-cutoff: high
+          output-format: table
+          add-cpes-if-none: true
+      - name: Set scan result
+        id: scan-result
+        if: always()
+        run: |
+          if [ "${{ steps.scan-tool.outcome }}" == "success" ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            echo "✅ Grype passed"
+          else
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            echo "❌ Grype failed"
+            exit 1
+          fi
+
+  summary:
+    name: Container scan summary
+    needs: [trivy, grype]
+    if: always()
     runs-on: ubuntu-latest
     outputs:
-      digest: ${{ steps.placeholder.outputs.digest }}
-      tag: ${{ steps.placeholder.outputs.tag }}
-      scan-result: ${{ steps.placeholder.outputs.scan-result }}
+      result: ${{ steps.aggregate.outputs.result }}
     steps:
-      - name: Workshop Placeholder
-        id: placeholder
+      - id: aggregate
         run: |
-          echo "🚧 Replace this job with content from workshop/container_scan/{tool}/workflow.yml!"
-          echo "This will implement: Build → Container Scan → Push workflow with your chosen tool"
-          {
-            echo "digest=workshop-placeholder"
-            echo "tag=workshop-placeholder"
-            echo "scan-result=workshop-placeholder"
-          } >> "$GITHUB_OUTPUT"
+          if [ "${{ needs.trivy.result }}" == "success" ] && [ "${{ needs.grype.result }}" == "success" ]; then
+            echo "result=success" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=failure" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
