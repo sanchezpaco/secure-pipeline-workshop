@@ -278,16 +278,231 @@
 
 ## Modules not executed (static observations)
 
-_(pending)_
+### `runtime_infra_scan` (Prowler + Steampipe)
+
+- **Why skipped**: Requires an AWS sandbox account, an OIDC trust between GitHub and AWS, and an `AWS_IAM_ROLE_ARN` secret. None of those are part of the workshop scaffolding — they're attendee-side setup.
+- **README quality**: Strong on theory (good taxonomy of runtime issues, clear differentiation from IaC) but does not tell the attendee *how* to set up the AWS side. A fresh attendee following the workshop linearly hits a hard dependency wall here. Recommend either:
+  - splitting this module into a "static read" track (read the runtime checklist, no execution) and an "advanced" track (full AWS setup), or
+  - providing a one-click CFT/Terraform module that creates the IAM role and OIDC provider (and a teardown script).
+- **Snippet hygiene**: `runtime-infra-scan.yml` orchestrator entry pulls `secrets: AWS_IAM_ROLE_ARN`. If that secret is missing in the fork, the entire orchestrator fails at the wiring stage even before the scanner runs — and the failure is "secret not found", not a friendly "not configured for this fork." Pre-flight check + skip-if-unset would be a kindness.
+
+### `dast` (placeholder)
+
+- **Status**: Not shipped in v1 — the orchestrator stub literally exits 0 with `🚧 DAST - Coming soon`. Workshop README still lists it (or the index does) without flagging "not yet".
+- **Recommendation**: Either remove it from the workshop index until shipped, or relabel as "preview / not part of v1" so attendees don't waste time looking for the snippet folder. The `workshop/dast/` directory simply does not exist, which is more confusing than the YAML stub.
+
+### `ai_scan` (Google Gemini)
+
+- **Status**: Wired with `google-github-actions/run-gemini-cli`. The brief flagged "current Gemini integration is considered outdated", and indeed the module ships only the Gemini path with no fallback or alternative.
+- **README quality**: Long preamble on AI capabilities/limitations (good), but the practical part is one tool (Gemini) and a single GitHub Action. Concerns:
+  - **API key + cost burden** is on the attendee (the README mentions "Cost Considerations" abstractly but doesn't say "you need a Gemini API key to run this module").
+  - **Privacy / data residency**: the module ships code to Google. For an enterprise workshop this is a real blocker — the README acknowledges "Privacy Concerns" but doesn't give an alternative path (e.g., Claude Code Action, OpenAI Codex review, a local LLM via Ollama).
+  - **Determinism**: the module promises "different outputs for the same input across runs" — that fundamentally breaks the TDD-with-rollback flow used by the rest of the workshop. AI scan should probably be presented as a *complementary* track, not a regular module slot.
+- **Recommendation**: Reframe as an optional / non-gating module, document the API-key prerequisite up front, and add at least one alternative runner (e.g. Claude Code Action or OpenAI Codex) so attendees with a different provider can still complete it.
 
 ## Cross-module usability observations
 
-_(pending)_
+These showed up across multiple modules and are the highest-leverage README/snippet changes.
+
+1. **The snippet IS often the bait, but the README never says so.** In Module 1 both Claws (`ruby/setup-ruby@master`) and zizmor (`zizmorcore/zizmor-action@main`) are intentionally unpinned in the snippet. A fresh attendee assumes "I copied wrong" before realising the snippet is deliberately insecure. One sentence per snippet README ("the snippet ships with one planted bait — pin it") would save attendees 3-5 minutes of confusion each. Same pattern less explicitly in the secrets and code-scan snippets.
+2. **Snippet output formats are wildly inconsistent — and that's the single biggest UX axis.** Four flavours showed up across 11 tools:
+   - **Excellent**: TruffleHog (raw stdout block), Checkov (per-rule failed checks + offending lines), the CodeQL custom `Summarize findings` step, the osv-scanner custom `Summarize findings` step, Trivy as container scanner (table format), Gitleaks (despite wget noise).
+   - **Mediocre**: Semgrep (`Findings: 1 (1 blocking)` — count only).
+   - **Bad**: Grype container (`ERROR discovered vulnerabilities at or above the severity threshold` — one line, no CVE list), Trivy IaC (SARIF-only, log shows nothing), zizmor (full SARIF JSON dump in the log).
+   - **The fix template already exists**: copy CodeQL's / osv-scanner's `Summarize findings` step (jq over the SARIF) into every other SARIF-producing snippet. That alone would equalise the experience across the whole workshop.
+3. **"Bumping to the obvious next version" is rarely the right fix — and the workshop never warns you.** Two modules tripped on this:
+   - Module 4: bumping `node:20-alpine3.19 → node:20-alpine3.21` made things *worse* (8 → 19 findings) because alpine 3.21 still ships unpatched openssl. The actual fix is `node:25-alpine`.
+   - Module 2 SCA: bumping `axios@1.6.0 → axios@1.13.5` (the version Trivy listed as "Fixed Version") still left 2 unfixed CVEs per osv-scanner. The actual fix was `axios@1.15.2`.
+   - Both burned ~5 minutes of CI per wrong attempt. The README needs a generic note: *"Trivy/OSV's Fixed Version is per-CVE, not per-package. Always bump to the latest stable patch level, not the lowest version that closes the CVE you happened to be looking at."*
+4. **Module-level isolation leaks: the SCA bait jumped from Module 2 to Module 4.** The brief said "skip dependency-check" without recommending `osv-scanner` as a substitute, so the SCA slot stayed as a pass-through placeholder. The `axios@1.6.0` bait then re-surfaced as a container-scan finding in Module 4, mixing application-layer with OS-layer CVEs in the same noisy log. Plugging `osv-scanner` into the SCA slot in Module 2 caught the bait at the right layer (and found 2 *more* CVEs than Trivy's library scanner). Recommendation: **the brief should mandate `osv-scanner` for the SCA slot** when `dependency-check` is skipped, not leave it as an opt-in.
+5. **Writing the workshop report can fail the workshop.** Documenting the secrets-scan bait in `docs/reports/usability-dryrun-2026-05-01.md` (with literal `AKIA…` and the secret string for evidence) made Gitleaks fail on the report itself. Two options for attendees who write notes:
+   - Add `docs/reports/**` (or the equivalent) to a `.gitleaksignore` and a `.trufflehogignore`.
+   - Tell attendees up front to redact literals as `AKIA…REDACTED` / `[redacted-40-char-secret]` when writing notes.
+6. **Pinning hygiene drift in the snippets themselves.** Multiple snippets `uses: third-party-action@main` or `@master` while pinning `actions/*` to SHAs — exactly the lesson Module 1 teaches. Once you fix Module 1 the rest of the workshop still ships with the antipattern. Either pin all third-party actions to SHAs in the snippet templates from the start, or call out per-module "we didn't pin X yet — your job to fix it" so the lesson reinforces.
+7. **Lock-file footgun in Module 4 / Module 2 SCA.** Bumping `axios` in `package.json` alone breaks `npm ci` with `EUSAGE: package.json and package-lock.json are out of sync`. The error happens at *build* time inside the container scan, so attendees may misdiagnose it as "Trivy / Grype broken" rather than "I forgot to regen the lockfile." The container README needs to say "after a dep bump, run `npm install --package-lock-only` (or `npm install`) and commit `package-lock.json` as well."
+8. **CI wall-clock dominates UX for the slow modules.** CodeQL takes 4-5 minutes per run; Trivy build+scan ~5 min. With a 2-step fix (e.g. axios 1.13.5 → 1.15.2), an attendee waits 10+ minutes between bait and green. The workshop is otherwise tight at ~3 min per tool. Mention this in each slow module's README so attendees don't think CI is stuck.
 
 ## Executive summary
 
-_(pending — top 3 README changes will go here)_
+### Top 3 highest-impact README/snippet changes
+
+1. **Standardise the "Summarize findings" step across all SARIF-producing snippets.** Copy the jq-based `Summarize findings` step from the CodeQL and osv-scanner snippets into Semgrep, Grype, Trivy IaC, and zizmor. This single change converts five "what did the scanner even find?" experiences into clear `ruleId | message | file:line` reports — and costs ~10 lines of YAML per snippet. **Highest leverage by far.** Pain it removes: 5-10 minutes per affected tool, every attendee, forever.
+2. **State explicitly per snippet README: "this snippet ships with N planted bait(s); the failure is intentional."** Especially in Module 1 (Claws / zizmor — the snippet itself is the bait), Module 4 (the Dockerfile + `package.json` shipped with deliberate vulns), Module 5 (the SSH-22-from-anywhere SG). Pair each snippet with a one-line "what to look for" pointer. Prevents the "I copied this wrong" rabbit hole that hits every fresh attendee.
+3. **Mandate `osv-scanner` for the SCA slot in Module 2; flag the "Fixed Version is per-CVE, not per-package" pitfall.** Without `osv-scanner`, the axios bait crosses module boundaries into the container scan in Module 4, mixing didactic categories. With `osv-scanner` the bait lives in Module 2 where it belongs *and* the workshop discovers 2 extra CVEs Trivy misses. While we're here, document that bumping to the version a scanner lists as "fixed" only fixes the CVE you happened to be looking at — `npm view <pkg> versions` for the latest is the better default.
+
+### Tool scoring (1-5 per axis)
+
+| Module | Tool | Discoverability | Predictability | Signal-to-noise | Convergence |
+|--------|------|:---------------:|:--------------:|:---------------:|:-----------:|
+| pipeline_scan | Claws | 4 | 5 | 5 | 5 |
+| pipeline_scan | zizmor | 4 | 5 | 2 (full SARIF dump) | 5 |
+| code_scan/SAST | CodeQL | 4 | 5 | 5 (custom summary step) | 5 |
+| code_scan/SAST | Semgrep | 3 | 5 | 1 (no rule in log) | 5 |
+| code_scan/SCA | osv-scanner | 5 | 4 (1.13.5 still vuln) | 5 | 5 |
+| secrets_scan | TruffleHog | 5 | 5 | 5 | 5 |
+| secrets_scan | Gitleaks | 5 | 5 | 3 (wget noise) | 5 |
+| container_scan | Trivy | 4 | 3 (alpine 3.21 trap) | 5 | 5 |
+| container_scan | Grype | 4 | 5 | 1 (single-line error) | 5 |
+| iac_scan | Checkov | 5 | 5 | 5 | 5 |
+| iac_scan | Trivy IaC | 4 | 5 | 1 (SARIF-only) | 5 |
+
+**Best overall attendee experience**: Checkov, TruffleHog, osv-scanner, CodeQL — in that order. **Worst**: Grype container and Trivy IaC, both because of the SARIF-only output choice in their snippets.
 
 ## Appendix — Fix recipes
 
-_(pending — copy-pasteable fix blocks per finding)_
+For each finding I encountered, a self-contained, copy-pasteable "how I fixed it" block. Maintainers can drop these into the relevant module README under "Common fixes" or "Hints".
+
+### pipeline_scan / Claws / `UnpinnedAction`
+
+**Finding**: `Violation: UnpinnedAction on .github/workflows/pipeline-scan.yml:24` — the `ruby/setup-ruby@master` step in Claws's own snippet.
+**Fix**:
+```yaml
+- name: Set Up Ruby
+  uses: ruby/setup-ruby@0ecad18fe538ef70f6b82773daecc6af1a7fe58a # v1.252.0
+  with:
+    ruby-version: '3.3'
+```
+**Notes**: Per `claws-config.yml`, only `actions/*` is in `trusted_authors`, so any non-`actions/*` action must be SHA-pinned. Pick a SHA from a tagged release of `ruby/setup-ruby` and add a trailing comment with the version.
+
+### pipeline_scan / zizmor / `unpinned-uses`
+
+**Finding**: `zizmor/unpinned-uses` at `.github/workflows/pipeline-scan.yml:26` — the `zizmorcore/zizmor-action@main` step in zizmor's own snippet.
+**Fix**:
+```yaml
+- name: Run zizmor 🌈
+  uses: zizmorcore/zizmor-action@b1d7e1fb5de872772f31590499237e7cce841e8e # v0.5.3
+```
+**Notes**: zizmor's job log dumps full SARIF; search for `"ruleId"` and `"startLine"` to find the offending line. Cap `min-severity: "high"` to keep the workshop bait the primary signal.
+
+### code_scan/SAST / CodeQL / `js/command-line-injection`
+
+**Finding**: `code/src/simple-app.js:42` — `exec(\`cat "${filePath}"\`, …)` flows user input into shell.
+**Fix** (full diff, also clears Semgrep's child-process rule and a follow-up path-traversal finding):
+```js
+if (filePath) {
+  const fs = require('fs');
+  const path = require('path');
+
+  const safeBase = path.resolve(__dirname, 'public');
+  const resolved = path.resolve(safeBase, filePath);
+  if (!resolved.startsWith(safeBase + path.sep)) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid path' }));
+    return;
+  }
+
+  fs.readFile('./config.json', 'utf8', (configErr, configData) => {
+    const config = configErr ? { debug: false } : JSON.parse(configData);
+
+    fs.readFile(resolved, 'utf8', (error, stdout) => {
+      if (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ config: config, content: stdout }));
+    });
+  });
+}
+```
+**Notes**: The minimum to clear `js/command-line-injection` is replacing `exec(...)` with `fs.readFile`. The `path.resolve` + `startsWith` guard is a free win that prevents path-traversal follow-ups.
+
+### code_scan/SAST / Semgrep / `javascript.lang.security.audit.detect-child-process`
+
+**Finding**: 1 blocking finding (rule + line not visible in the job log — only in SARIF). Same `exec(...)` line as CodeQL.
+**Fix**: Identical to the CodeQL diff above.
+**Notes**: Add a `--text` summary in addition to `--sarif`, or upload `semgrep-results.sarif` via `actions/upload-artifact`, so attendees can see *what* failed without a GHAS license.
+
+### code_scan/SCA / osv-scanner / `axios@1.6.0` (6 CVEs)
+
+**Finding**: `CVE-2025-62718`, `CVE-2026-25639`, `CVE-2025-58754`, `CVE-2024-39338`, `CVE-2026-40175`, `CVE-2025-27152` — all on `axios@1.6.0` in `code/package.json`.
+**Fix**:
+```diff
+-    "axios": "1.6.0"
++    "axios": "1.15.2"
+```
+Then regenerate the lockfile:
+```bash
+cd code && rm -f package-lock.json && npm install --package-lock-only && cd ..
+git add code/package.json code/package-lock.json
+```
+**Notes**: Bumping to `1.13.5` (Trivy's "Fixed Version" for the `1.6.0` CVEs) still leaves 2 unfixed (`CVE-2025-62718`, `CVE-2026-40175`). Always check `npm view axios versions` and pick a recent patch.
+
+### secrets_scan / TruffleHog / AWS detector
+
+**Finding**: `Detector Type: AWS` at `code/src/simple-app.js:4` — hardcoded `AKIA…REDACTED`.
+**Fix**:
+```diff
+-const AWS_ACCESS_KEY_ID = 'AKIA…REDACTED'
+-const AWS_SECRET_ACCESS_KEY = '[redacted-40-char-secret]'
++const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
++const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+```
+**Notes**: Snippet uses `--results=verified,unknown,unverified` because the workshop's AKIA is invalid — under default `verified`-only filtering it would silently pass.
+
+### secrets_scan / Gitleaks / `aws-access-token` + `generic-api-key`
+
+**Finding**: 2 leaks at `code/src/simple-app.js:4-5` (access key + entropy match on the secret).
+**Fix**: Same diff as TruffleHog above. One edit clears both rules.
+**Notes**: The snippet uses `--no-git` (OPTION 2) so only the current filesystem is scanned — git history with the literals isn't flagged once the latest commit is clean.
+
+### container_scan / Trivy / alpine `musl` + axios CVEs
+
+**Finding** (mixed OS + app layer):
+- `musl` / `musl-utils` 4 HIGHs (alpine 3.19.4 base).
+- `axios@1.6.0` 4 HIGHs (SSRF, DoS, cred leak).
+
+**Fix**:
+```diff
+-FROM node:20-alpine3.19
++FROM node:25-alpine
+```
+```diff
+-    "axios": "1.6.0"
++    "axios": "1.15.2"
+```
+Plus regenerate `code/package-lock.json` (otherwise `npm ci` fails).
+**Notes**: Do *not* bump only the alpine minor — `node:20-alpine3.21` still has unpatched openssl HIGHs. Jump to current node-major + alpine. The application-layer `axios` finding really belongs in Module 2 (SCA); fixing it there with `osv-scanner` makes it disappear here too.
+
+### container_scan / Grype / EOL distro + same CVEs
+
+**Finding**: Single error line + helpful warning `188 packages from EOL distro "alpine 3.19.4"`. Detailed CVEs only in SARIF / GHAS.
+**Fix**: Same as Trivy container.
+**Notes**: For workshop visibility, change the snippet to `output-format: table` or upload `${{ steps.scan-tool.outputs.sarif }}` as an `actions/upload-artifact`.
+
+### iac_scan / Checkov / `CKV_AWS_24`
+
+**Finding**: `aws_security_group.ecs_tasks` at `infra/main.tf:120-126` — port 22 ingress from `0.0.0.0/0` despite `description = "HTTP from ALB"`.
+**Fix**:
+```diff
+   ingress {
+-    description = "HTTP from ALB"
+-    from_port   = 22
+-    to_port     = 22
++    description = "HTTP from ALB (workshop)"
++    from_port   = 3000
++    to_port     = 3000
+     protocol    = "tcp"
+-    cidr_blocks = ["0.0.0.0/0"]
++    cidr_blocks = [data.aws_vpc.existing.cidr_block]
+   }
+```
+**Notes**: The "SRE note" comment above the resource literally hands you `data.aws_vpc.existing.cidr_block`. Excellent signposting — keep it.
+
+### iac_scan / Trivy IaC / `AVD-AWS-0107`
+
+**Finding**: Same `infra/main.tf:120-126` block; rule ID inferred (`AVD-AWS-0107`) — Trivy IaC's snippet writes only SARIF, so the log shows nothing.
+**Fix**: Identical to Checkov above.
+**Notes**: Switch the snippet's `format` from `'sarif'` to `'table'` (or run Trivy twice — once table, once SARIF for upload), or add `actions/upload-artifact` for `trivy-results.sarif`. Without one of those, attendees can't see what to fix.
+
+### docs / Gitleaks meta-finding (writing the workshop report)
+
+**Finding**: The report's quoted bait literals (`AKIA…` and the 40-char secret) made Gitleaks fail on `docs/reports/usability-dryrun-2026-05-01.md` itself.
+**Fix**: Redact in the report:
+```diff
+-AWS_SECRET_ACCESS_KEY = 'oMKFr…the actual 40-char string'
++AWS_SECRET_ACCESS_KEY = '[redacted-40-char-secret]'
+```
+**Notes**: For maintainers, the right long-term fix is a `.gitleaksignore` covering `docs/reports/**` (and the equivalent for TruffleHog). For attendees, the practical advice is "write `AKIA…REDACTED` and `[redacted-40-char-secret]` whenever you cite the bait."
+
