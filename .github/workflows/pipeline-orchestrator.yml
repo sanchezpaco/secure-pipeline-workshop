@@ -4,10 +4,12 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   pipeline-scan:
     uses: ./.github/workflows/pipeline-scan.yml
-    secrets: inherit
     permissions:
       security-events: write
       contents: read # only needed for private repos
@@ -23,10 +25,14 @@ jobs:
 
   secrets-scan:
     needs: pipeline-scan
+    permissions:
+      contents: read
     uses: ./.github/workflows/secrets-scan.yml
 
   iac-scan:
     needs: pipeline-scan
+    permissions:
+      contents: read
     uses: ./.github/workflows/iac-scan.yml
 
   build-and-container-scan:
@@ -39,10 +45,14 @@ jobs:
 
   deploy-infrastructure:
     needs: iac-scan
+    permissions:
+      contents: read
     uses: ./.github/workflows/deploy-infrastructure.yml
 
   deploy-application:
     needs: [build-and-container-scan, deploy-infrastructure]
+    permissions:
+      contents: read
     uses: ./.github/workflows/deploy-application.yml
 
   runtime-infra-scan:
@@ -53,11 +63,14 @@ jobs:
       app-url: https://workshop-app-${{ github.ref_name }}.example.com
     permissions:
       id-token: write
+      contents: read
     secrets:
       AWS_IAM_ROLE_ARN: ${{ secrets.AWS_IAM_ROLE_ARN }}
 
   dast:
     needs: deploy-application
+    permissions:
+      contents: read
     uses: ./.github/workflows/dast.yml
     with:
       environment: ${{ github.ref_name }}
@@ -65,6 +78,8 @@ jobs:
 
   integration-test:
     needs: deploy-application
+    permissions:
+      contents: read
     uses: ./.github/workflows/integration-test.yml
     with:
       environment: ${{ github.ref_name }}

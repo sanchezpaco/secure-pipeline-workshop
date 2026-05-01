@@ -17,9 +17,12 @@ jobs:
     steps:
       - name: Deploy application
         id: deploy
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
-          echo "🚀 Deploying to ${{ github.ref_name }} environment..."
-          echo "📦 Image: workshop-app:${{ github.sha }}"
-          echo "🌐 URL: https://workshop-app-${{ github.ref_name }}.example.com"
+          echo "🚀 Deploying to ${REF_NAME} environment..."
+          echo "📦 Image: workshop-app:${SHA}"
+          echo "🌐 URL: https://workshop-app-${REF_NAME}.example.com"
           echo "result=deployed" >> "$GITHUB_OUTPUT"
           echo "✅ Deployment complete!"
