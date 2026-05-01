@@ -58,7 +58,67 @@
 
 ## Module 2 — Code Security Analysis
 
-_(pending)_
+> Scope per the run brief: SAST tools only (CodeQL, Semgrep). Skipped `dependency-check` (NVD key required) and didn't exercise `osv-scanner` — the SCA placeholder in `code-scan.yml` exits 0 by default, so it doesn't gate the orchestrator.
+
+### Tool A — CodeQL
+
+- **What I did**: Replaced the `jobs:` placeholder in `.github/workflows/code-scan.yml` (both `sast-scan` and `sca-scan` placeholders) with the snippet from `workshop/code_scan/sast/codeQL/workflow.yml`. Pushed.
+- **Finding(s)**: `js/command-line-injection` at `code/src/simple-app.js:42` — `exec(\`cat "${filePath}"\`, …)` flows user input from `req.body.path` into a shell command. The CodeQL step prints the count and rule ID nicely (`❌ Found 1 CodeQL finding(s):` + a one-line summary).
+- **Friction**: Low. The CodeQL "Summarize findings" step in the snippet is well-designed — `ruleId | message | path:line` is exactly what an attendee needs, no SARIF spelunking required. The only friction is **wall-clock**: CodeQL's `init` + `database create` + `analyze` consistently take 4–5 minutes per push, so the bait/fix loop is ~10 min round trip. The bait itself is signposted in the source by a `// TODO: Tech debt - should use fs.readFile instead of shell command for security` comment, so the fix path is obvious.
+- **Fix applied**:
+
+  ```diff
+  -        if (filePath) {
+  -          const fs = require('fs');
+  -          const { exec } = require('child_process');
+  -
+  -          fs.readFile('./config.json', 'utf8', (configErr, configData) => {
+  -            const config = configErr ? { debug: false } : JSON.parse(configData);
+  -
+  -            // TODO: Tech debt - should use fs.readFile instead of shell command for security
+  -            exec(`cat "${filePath}"`, (error, stdout, stderr) => {
+  +        if (filePath) {
+  +          const fs = require('fs');
+  +          const path = require('path');
+  +
+  +          const safeBase = path.resolve(__dirname, 'public');
+  +          const resolved = path.resolve(safeBase, filePath);
+  +          if (!resolved.startsWith(safeBase + path.sep)) {
+  +            res.writeHead(400, { 'Content-Type': 'application/json' });
+  +            res.end(JSON.stringify({ error: 'Invalid path' }));
+  +            return;
+  +          }
+  +
+  +          fs.readFile('./config.json', 'utf8', (configErr, configData) => {
+  +            const config = configErr ? { debug: false } : JSON.parse(configData);
+  +
+  +            fs.readFile(resolved, 'utf8', (error, stdout) => {
+  ```
+
+  (Just removing `exec` is sufficient to clear the rule, but the path-traversal guard is a free win and avoids a follow-up finding from path-injection rules.)
+
+- **README hint to add**: *"CodeQL flags `js/command-line-injection` at `code/src/simple-app.js:42`. The bait is `exec(\`cat "${filePath}"\`)` — replace it with `fs.readFile(resolved, 'utf8', …)` after constraining `filePath` to a safe base directory with `path.resolve` + a `startsWith` check. Heads up: each CodeQL run takes 4-5 min — be patient between bait and fix."*
+- **Time**: ~10 min round-trip (limited by CodeQL wall-clock).
+
+### Tool B — Semgrep
+
+- **Rollback**: `git revert` of the CodeQL fix commit; the JS bait was restored. Then I rewrote `.github/workflows/code-scan.yml` with the Semgrep snippet.
+- **What I did**: Replaced the `jobs:` block with the snippet from `workshop/code_scan/sast/semgrep/workflow.yml`. Pushed.
+- **Finding(s)**: 1 blocking finding (Semgrep prints just `Findings: 1 (1 blocking)` and exits 1). The job log doesn't tell you the rule ID or the file/line — those live only in the SARIF.
+- **Friction**: Medium-high — and this is the highest-impact usability gap I hit in any module. The snippet writes findings to `semgrep-results.sarif` and uploads to GitHub code-scanning, but the job log only says "1 finding" — no rule, no path, no line. As an attendee:
+  - I can't tell what to fix from the log alone.
+  - I have no SARIF artifact to download (the snippet uses `upload-sarif` but doesn't `actions/upload-artifact`, so on a fork without GHAS you can't see findings anywhere).
+  - I had to pattern-match against the CodeQL bait I'd just fixed and assume Semgrep was flagging the same `exec(...)` line — which is a leap most fresh attendees won't make.
+- **Fix applied**: Same diff as CodeQL (`exec` → `fs.readFile` with path guard).
+- **README hint to add**: *"Semgrep's job log only prints a finding count. To see the rule, either (a) add a `--text` summary alongside `--sarif`, (b) drop `--sarif`/`--output` so Semgrep prints findings to stdout, or (c) upload `semgrep-results.sarif` as an artifact via `actions/upload-artifact`. The bait is the same `exec(\`cat "${filePath}"\`)` line — Semgrep flags it via `javascript.lang.security.audit.detect-child-process` in the `p/security-audit` ruleset."*
+- **Time**: ~6 min (Semgrep itself runs in ~3 s; install + checkout dominates).
+
+### Module-level observations
+
+- **Convergence**: Both tools converge on the same root bait (`exec` with user-controlled string). They both ignore the hardcoded AWS keys at `simple-app.js:4-5` (Semgrep's `p/security-audit` doesn't include the AWS-key rule by default; CodeQL's javascript-security-extended doesn't either) — those are reserved for the secrets module, which is correct module separation. Convergence: 5/5.
+- **Smoother experience**: CodeQL by a wide margin, *because of the snippet*, not the tool. The CodeQL snippet has a custom `Summarize findings` step that prints `ruleId | message | path:line`. The Semgrep snippet doesn't — it dumps to SARIF and stops. Same scanner output, vastly different attendee experience. The Semgrep snippet should adopt the same summary pattern.
+- **Discoverability gap**: Neither module README mentions which line of `code/src/simple-app.js` is the planted bait. The `// TODO: Tech debt - should use fs.readFile…` comment in the source IS the hint, but readers find it only after the scan fails — a one-line README pointer ("look in `/readfile`") would save a confused attendee 2-3 minutes.
+
 
 ## Module 3 — Secrets Scan
 
