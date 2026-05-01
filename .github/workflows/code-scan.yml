@@ -44,7 +44,12 @@ jobs:
         run: |
           count=$(jq '[.runs[].results[]] | length' codeql-results/*.sarif | awk '{s+=$1} END {print s}')
           echo "CodeQL findings: $count"
-          test "${count:-0}" -eq 0
+          if [ "${count:-0}" -gt 0 ]; then
+            jq -r '.runs[].results[] |
+              "  - \(.ruleId) | \(.message.text)\n      \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 1)"' \
+              codeql-results/*.sarif
+            exit 1
+          fi
 
       - name: Set scan result
         id: scan-result
