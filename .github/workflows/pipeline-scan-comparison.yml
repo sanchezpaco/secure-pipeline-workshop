@@ -1,0 +1,55 @@
+name: Pipeline scan tool comparison
+
+# Throwaway: runs Claws and zizmor against the SAME .github/workflows/ to
+# compare what each finds. continue-on-error so both jobs run regardless of
+# the other and both findings reach the log.
+
+on:
+  push:
+    branches: [zizmor-fix]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  claws:
+    name: Claws
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@4a9ddd6f338a97768b8006bf671dfbad383215f4 # v1.207.0
+        with:
+          ruby-version: "3.3"
+      - name: Install shellcheck + claws
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          gem install claws-scan -v 0.7.5
+      - name: Write Claws config
+        run: cp workshop/pipeline_scan/claws/claws-config.yml /tmp/claws-config.yml
+      - name: Run Claws
+        continue-on-error: true
+        run: |
+          flags=()
+          while IFS= read -r f; do flags+=("-t" "$f"); done < <(find .github/workflows -type f -name '*.yml')
+          analyze -f stdout -c /tmp/claws-config.yml "${flags[@]}"
+
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run zizmor (annotations format for readable log)
+        continue-on-error: true
+        uses: zizmorcore/zizmor-action@main
+        with:
+          min-severity: "low"
+          online-audits: "false"
+          advanced-security: "false"
+          annotations: "true"
