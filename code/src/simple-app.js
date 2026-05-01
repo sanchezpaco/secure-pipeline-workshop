@@ -81,34 +81,27 @@ const server = http.createServer((req, res) => {
     `);
   } else if (url === '/fetch' && method === 'POST') {
     let body = '';
-    req.on('data', chunk => {
-      body += chunk.toString();
-    });
-    req.on('end', () => {
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      let targetUrl;
       try {
-        const data = JSON.parse(body);
-        const targetUrl = data.url;
-        if (!targetUrl) {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'No url provided' }));
-          return;
-        }
-        // TODO: validate URL allow-list before fetching to prevent SSRF
-        axios.get(targetUrl)
-          .then(response => {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              status: response.status,
-              data: response.data
-            }));
-          })
-          .catch(err => {
-            res.writeHead(502, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: err.message }));
-          });
-      } catch (e) {
+        ({ url: targetUrl } = JSON.parse(body));
+      } catch {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        return res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+      if (!targetUrl) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'No url provided' }));
+      }
+      try {
+        // TODO: validate URL allow-list before fetching to prevent SSRF
+        const { status, data } = await axios.get(targetUrl);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status, data }));
+      } catch (err) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
       }
     });
   } else if (url === '/data' && method === 'GET') {

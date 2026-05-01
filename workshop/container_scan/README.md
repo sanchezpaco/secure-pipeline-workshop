@@ -38,20 +38,11 @@ By the end of this module, you will:
 - [🔜] Identify Dockerfile security best practices
 
 > [!TIP]
-> **The fix can have layers.** The workshop's `code/Dockerfile` ships with
-> an outdated base image, so the obvious first move is to bump it. That
-> removes most CVEs (the ones in the OS packages and the language runtime
-> binary) but does not always produce a clean scan: transitive
-> dependencies bundled inside the new base image — for example, the
-> libraries that ship with the global `npm` CLI — may still surface as
-> HIGH findings. A clean scan often requires both:
->
-> 1. **Bump the base image** (e.g., `FROM node:16.14.0-alpine` → `FROM node:25-alpine`).
-> 2. **Refresh the bundled deps inside the image** (e.g., `RUN npm install -g npm@11.13.0 && npm cache clean --force`).
->
-> Real-world security has layers: the base image is one, the transitive
-> deps it ships are another. Bumping the base is necessary but not always
-> sufficient — re-run the scanner between each step to see what's left.
+> **A clean scan can take more than one fix.** Bumping the base image
+> clears OS-package and language-runtime CVEs, but transitive dependencies
+> bundled inside the new image (e.g., libraries shipped with the global
+> package manager) may still surface as HIGH findings. Expect to fix in
+> layers — re-run the scanner between each change to see what's left.
 
 ## Security Checklist
 

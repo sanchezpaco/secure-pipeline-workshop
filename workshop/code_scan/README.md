@@ -45,13 +45,11 @@ Malicious actors can exploit vulnerabilities in your code to gain unauthorized a
 
 ### SCA tools
 
-These two SCA tools pull vulnerability data from different sources, so the same dependency may surface (or not) depending on the choice. Worth knowing both:
-
-- [**osv-scanner**](https://github.com/google/osv-scanner) - Modern, lockfile-based scanner from Google. Queries [OSV.dev](https://osv.dev/), an open-standard database that aggregates GitHub Advisories, RustSec, PyPA, GoVulnDB and others. No external setup, no API keys, no DB downloads.
+- [**osv-scanner**](https://github.com/google/osv-scanner) - Lockfile-based vulnerability scanner backed by the [OSV.dev](https://osv.dev/) database
   - [GitHub Action](https://github.com/google/osv-scanner-action) | [Documentation](https://google.github.io/osv-scanner/)
-- [**OWASP Dependency Check**](https://github.com/dependency-check/DependencyCheck) - Long-running OWASP project, focused on identifying known vulnerabilities in declared dependencies. Sources its data from NVD directly.
+- [**OWASP Dependency Check**](https://github.com/dependency-check/DependencyCheck) - OWASP tool for Software Composition Analysis (SCA) to identify known vulnerabilities in dependencies
   - [GitHub Action](https://github.com/dependency-check/Dependency-Check_Action) | [Documentation](https://jeremylong.github.io/DependencyCheck/)
-  - **Heads up**: since 2024 NVD aggressively rate-limits unauthenticated clients, so without an `NVD_API_KEY` ([request one here](https://nvd.nist.gov/developers/request-an-api-key)) Dependency Check effectively returns 0 findings — a silent false-pass that defeats the point of running it. If you don't want to manage an external key, prefer osv-scanner above.
+  - **Heads up**: Dependency Check requires an `NVD_API_KEY` to keep its CVE database up to date — see [NVD developers](https://nvd.nist.gov/developers/request-an-api-key). Without one, the scan may return 0 findings.
 
 ## Learning Objectives
 
