@@ -30,6 +30,7 @@ jobs:
         with:
           languages: javascript
           queries: security-extended
+          source-root: code
 
       - name: Run CodeQL analysis
         id: codeql
