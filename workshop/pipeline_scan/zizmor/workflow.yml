@@ -28,9 +28,15 @@ jobs:
           persist-credentials: false
 
       - name: Run zizmor 🌈
+        id: zizmor
         uses: zizmorcore/zizmor-action@main
         with:
           min-severity: "high"
           # Disable online audits — they hard-crash the run on any GitHub API HTTP error
           # (see zizmor#1252 / #1874).
           online-audits: "false"
+
+      - name: Fail on findings
+        if: always()
+        run: |
+          test "$(jq '[.runs[].results[]] | length' "${{ steps.zizmor.outputs.output-file }}")" -eq 0
