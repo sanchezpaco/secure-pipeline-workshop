@@ -9,7 +9,7 @@ on:
 
 jobs:
   iac-scan:
-    name: IAC Scan with Checkov
+    name: IAC Scan with Trivy
     runs-on: ubuntu-latest
     outputs:
       result: ${{ steps.scan-result.outputs.result }}
@@ -20,13 +20,25 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Run Checkov IAC scanner
+      - name: Run Trivy vulnerability scanner
         id: scan-tool
-        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf # v12.1347.0
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
         with:
-          directory: infra/
-          framework: terraform
-          quiet: true
+          scan-type: 'config'
+          scan-ref: infra/
+          hide-progress: true
+          format: 'sarif'
+          limit-severities-for-sarif: true
+          output: 'trivy-results.sarif'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: false
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
+        with:
+          sarif_file: 'trivy-results.sarif'
 
       - name: Set scan result
         id: scan-result
@@ -38,5 +50,10 @@ jobs:
           else
             echo "result=failure" >> "$GITHUB_OUTPUT"
             echo "❌ IAC scan failed - security issues detected"
+            if [ "${{ github.event_name }}" == "pull_request" ]; then
+              echo "🔍 View findings: https://github.com/${{ github.repository }}/security/code-scanning?query=pr%3A${{ github.event.number }}+is%3Aopen"
+            else
+              echo "🔍 View findings: https://github.com/${{ github.repository }}/security/code-scanning"
+            fi
             exit 1
           fi
