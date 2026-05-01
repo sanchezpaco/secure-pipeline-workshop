@@ -31,7 +31,7 @@ jobs:
           languages: javascript
 
       - name: Add codeql to PATH
-        run: echo "$RUNNER_TOOL_CACHE"/CodeQL/*/x64/codeql >> "$GITHUB_PATH"
+        run: find "$RUNNER_TOOL_CACHE/CodeQL" -name codeql -type f -printf '%h\n' -quit >> "$GITHUB_PATH"
 
       - name: Build CodeQL database
         run: |
