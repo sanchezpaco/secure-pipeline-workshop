@@ -5,64 +5,42 @@ on:
     outputs:
       scan-result:
         description: "Pipeline scan result"
-        value: ${{ jobs.pipeline-scan.outputs.result }}
+        value: ${{ jobs.zizmor.outputs.result }}
 
 jobs:
-  pipeline-scan:
-    name: Pipeline Scan with Claws
+  zizmor:
+    name: Run zizmor 🌈
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
     outputs:
-      result: ${{ steps.scan-result.outputs.result }}
+      result: ${{ steps.set-result.outputs.result }}
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0
           persist-credentials: false
 
-      - name: Set Up Ruby
-        uses: ruby/setup-ruby@c4e5b1316158f92e3d49443a9d58b31d25ac0f8f # v1.306.0
+      - name: Run zizmor 🌈
+        id: zizmor
+        uses: zizmorcore/zizmor-action@main
         with:
-          ruby-version: '3.3'
+          min-severity: "high"
+          online-audits: "false"
 
-      - name: Set Up Claws Config
-        run: |
-          cp workshop/pipeline_scan/claws/claws-config.yml /tmp/claws-config.yml
-
-      - name: Set Up Shellcheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-
-      - name: Set Up Claws
-        run: |
-          gem install claws-scan -v 0.7.5
-
-      - name: Run Claws pipeline scanner
-        id: scan-tool
-        run: |
-          #!/bin/bash
-          echo "🔍 Starting workflow security analysis..."
-          workflow_files=$(find .github/workflows -type f)
-          if [[ -z "$workflow_files" ]]; then
-            echo "⚠️  No workflow files found"
-            exit 0
-          fi
-          flags=()
-          while IFS= read -r file; do
-            flags+=("-t" "$file")
-          done <<< "$workflow_files"
-          analyze -f stdout -c /tmp/claws-config.yml "${flags[@]}"
-
-      - name: Set scan result
-        id: scan-result
+      - name: Fail on findings
         if: always()
         run: |
-          if [ "${{ steps.scan-tool.outcome }}" == "success" ]; then
+          test "$(jq '[.runs[].results[]] | length' "${{ steps.zizmor.outputs.output-file }}")" -eq 0
+
+      - name: Set scan result
+        id: set-result
+        if: always()
+        run: |
+          if [ "${{ steps.zizmor.outcome }}" == "success" ]; then
             echo "result=success" >> "$GITHUB_OUTPUT"
-            echo "✅ Pipeline scan passed - no security issues detected"
           else
             echo "result=failure" >> "$GITHUB_OUTPUT"
-            echo "❌ Pipeline scan failed - security issues detected in workflows"
-            exit 1
           fi
