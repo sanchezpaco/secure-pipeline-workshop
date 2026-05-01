@@ -19,7 +19,7 @@ jobs:
       contents: read
       actions: read
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image-tag: ${{ steps.first-tag.outputs.tag }}
       digest: ${{ steps.build.outputs.imageid }}
     steps:
       - name: Checkout code
@@ -39,6 +39,10 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha
+
+      - name: Pick first tag
+        id: first-tag
+        run: echo "tag=$(echo '${{ steps.meta.outputs.tags }}' | head -n1)" >> "$GITHUB_OUTPUT"
 
       - name: Build Docker image (export tar)
         id: build
