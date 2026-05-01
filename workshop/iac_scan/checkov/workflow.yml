@@ -31,6 +31,7 @@ jobs:
         with:
           directory: infra/
           framework: terraform
+          quiet: true
 
       - name: Set scan result
         id: scan-result

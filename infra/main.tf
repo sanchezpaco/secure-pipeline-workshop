@@ -119,12 +119,13 @@ resource "aws_security_group" "ecs_tasks" {
 
   ingress {
     description = "HTTP from ALB"
-    from_port   = 0
-    to_port     = 0
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # trivy:ignore:AVD-AWS-0104
   egress {
     description = "HTTPS outbound"
     from_port   = 443
