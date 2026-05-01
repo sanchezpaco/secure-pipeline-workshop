@@ -130,6 +130,10 @@ if (filePath) {
 
 **What osv-scanner flagged**: `axios@1.6.0` has multiple known CVEs (SSRF, DoS, credential leakage, etc.). The snippet's `Summarize findings` step prints them as `CVE-… | Package … is vulnerable to …`.
 
+> 📌 **Why this matters here, not later**: vulnerable dependencies are an **SCA** problem and belong in this module. If you skip the SCA slot, the same `axios` CVEs will resurface in [Module 4 (Container Scan)](../container_scan/README.md) — mixed in with OS-layer findings — and the fix you'd apply is exactly the same. Resolve it once, here.
+
+> ⚠️ **Lock-file footgun**: bumping `axios` in `package.json` alone breaks the Docker build downstream with `EUSAGE: package.json and package-lock.json are out of sync` (because `code/Dockerfile` uses `npm ci`). Always regenerate the lockfile in the same commit.
+
 **Fix** — bump `axios` to a recent patched version. Don't pick the lowest version that closes a single CVE; pick the latest stable patch level (CVEs in the same package keep coming):
 
 ```diff
