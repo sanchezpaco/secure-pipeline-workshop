@@ -31,11 +31,7 @@ jobs:
           # Install TruffleHog
           curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
 
-          # Run filesystem scan.
-          # `unverified` is included so the workshop's didactic AKIA in
-          # code/src/simple-app.js (which AWS rejects as invalid) still
-          # triggers a failure. Without it, trufflehog discards the match
-          # as a false positive and the module silently passes.
+          # Run filesystem scan
           trufflehog filesystem . --results=verified,unknown,unverified --fail
 
       - name: Set scan result

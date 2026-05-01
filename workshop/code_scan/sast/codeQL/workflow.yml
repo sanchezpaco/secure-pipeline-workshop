@@ -5,26 +5,11 @@
 # CodeQL is a static analysis tool for finding security vulnerabilities in code
 # Repository: https://github.com/github/codeql
 #
-# In this workshop CodeQL focuses on data-flow / taint vulnerabilities — its
-# sweet spot. Hardcoded secrets are NOT its job, that lives in the
-# secrets_scan module. Expect this scan to surface the command-line
-# injection at code/src/simple-app.js:41 (user-controlled `filePath` passed
-# to `child_process.exec`).
-#
-# Why we drive the analysis manually instead of using
-# `github/codeql-action/analyze`: when triggered on `pull_request`, the
-# action filters the SARIF to only include alerts the PR introduces
-# relative to the base branch. For a workshop PR that doesn't touch
-# simple-app.js, every "pre-existing" finding gets stripped — silent green.
-# Running `codeql database analyze` directly with the CLI bypasses that
-# filter and reports the full set of findings.
-#
 # TO USE THIS JOB:
 # 1. Copy this entire job definition into .github/workflows/code-scan.yml
 # 2. Replace the current jobs: definition with this one
-# 3. The job builds a CodeQL DB from the repo, runs the security-extended
-#    suite, and counts findings from the resulting SARIF.
-# 4. The scan will fail if any data-flow vulnerabilities are found.
+# 3. The job will automatically scan all code in the code/ directory
+# 4. The scan will fail if vulnerabilities are found
 # =============================================================================
 
 jobs:
@@ -46,17 +31,8 @@ jobs:
         with:
           languages: javascript
 
-      - name: Locate codeql binary
-        run: |
-          # The init action extracts the toolchain into the runner's tool cache
-          # but doesn't put it on PATH. Find the binary and append its dir.
-          CODEQL_BIN=$(find "$RUNNER_TOOL_CACHE/CodeQL" -maxdepth 4 -name codeql -type f | head -1)
-          if [ -z "$CODEQL_BIN" ]; then
-            echo "ERROR: codeql binary not found under $RUNNER_TOOL_CACHE/CodeQL" >&2
-            exit 1
-          fi
-          echo "$(dirname "$CODEQL_BIN")" >> "$GITHUB_PATH"
-          echo "Found codeql at: $CODEQL_BIN"
+      - name: Add codeql to PATH
+        run: echo "$RUNNER_TOOL_CACHE"/CodeQL/*/x64/codeql >> "$GITHUB_PATH"
 
       - name: Build CodeQL database
         run: |
@@ -64,7 +40,7 @@ jobs:
             --language=javascript \
             --source-root=.
 
-      - name: Run CodeQL analysis (security-extended)
+      - name: Run CodeQL analysis
         id: codeql-tool
         run: |
           mkdir -p codeql-results

@@ -2,9 +2,8 @@
 # OSV-SCANNER CODE SCAN (SCA) JOB
 # =============================================================================
 #
-# osv-scanner queries Google's OSV.dev database — an open-standard
-# vulnerability feed that aggregates GitHub Advisories, RustSec, PyPA,
-# GoVulnDB and more. No NVD dependency, no API keys, lockfile-based.
+# osv-scanner is a vulnerability scanner for project dependencies, backed
+# by the OSV.dev database.
 # Repository: https://github.com/google/osv-scanner
 #
 # TO USE THIS JOB:
