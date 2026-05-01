@@ -64,6 +64,34 @@ By the end of this module, you will:
 - [ ] Monitoring and logging enabled for all critical resources
 - [ ] Regular runtime scans scheduled and reviewed
 
+## Solutions (spoilers — open only when stuck)
+
+> Unlike the other modules, this one has **no planted bait** to fix. Runtime scans target a *live* AWS account, so the findings depend entirely on whose infrastructure the job assumes into. During the workshop the role points at the maintainers' sandbox account, where you have no permissions to remediate anything — the job is expected to pass green even if Prowler reports findings (note the `-z` flag in the snippet, which suppresses the failing exit code on findings so the pipeline doesn't block on issues you can't fix).
+
+<details>
+<summary><b>Prowler</b> — what to expect during the workshop</summary>
+
+**What you'll see**: the `Run Prowler` step assumes the workshop AWS role and scans the `iam` and `s3` services. The HTML report is uploaded as the `prowler-html-report` artifact — download it from the run summary to browse findings grouped by service, severity, and check ID.
+
+**Why nothing is failing**: `prowler aws ... -z` (the "zero exit code" flag) is intentional here. Without it, *any* finding would fail the job, and you'd be staring at issues in someone else's account with no way to fix them. The point of this step in the workshop is to **wire the integration** (OIDC auth, role assumption, artifact upload), not to remediate.
+
+**Reading the report**: open `prowler-html-report/*.html` and look for high-severity items in `iam` (overly permissive policies, unused credentials, root usage) and `s3` (public buckets, unencrypted storage, missing logging). These are the categories you'd triage first on a real account.
+
+</details>
+
+<details>
+<summary><b>Running this on your own AWS account</b> — what changes</summary>
+
+When you adopt this job in a real repo, the workflow itself doesn't need to change — only the AWS side and how you treat findings:
+
+1. **Provision an IAM role** in your account with `SecurityAudit` + `ViewOnlyAccess`, plus a trust policy that lets GitHub Actions OIDC (`token.actions.githubusercontent.com`) assume it from your repo.
+2. **Set the secrets/vars** in GitHub: `AWS_IAM_ROLE_ARN` (secret), `AWS_REGION` and `AWS_IAM_ROLE_SESSION_DURATION` (variables).
+3. **Decide your failure policy**: drop `-z` from the `prowler` command if you want the pipeline to fail on findings, or keep it and gate on severity (e.g. `--severity critical high`) so only the worst issues block merges.
+4. **Scope the scan**: `--service iam s3` is fine for a demo, but for real use widen it (`ec2`, `rds`, `kms`, `cloudtrail`, …) or run a full `prowler aws` on a schedule and a narrower scan per PR.
+5. **Triage the findings**: most checks map to a specific resource and a remediation hint. Fix the misconfiguration in your IaC (back to module 5) so the next run comes back clean — runtime scans are most useful when paired with IaC scans to catch drift.
+
+</details>
+
 ## References
 - [Prowler's State of Cloud Security Report 2025](https://prowler.com/blog/cloud-security-report-2025/)
 - [Top cloud misconfigurations: A CSPM perspective](https://sysdig.com/blog/top-cloud-misconfigurations/)
