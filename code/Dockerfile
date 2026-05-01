@@ -1,4 +1,6 @@
-FROM node:16.14.0-alpine
+FROM node:20-alpine3.19
+
+RUN npm install -g npm@11.13.0 && npm cache clean --force
 
 RUN addgroup -g 1001 -S nodejs && \
   adduser -S nextjs -u 1001 -G nodejs
