@@ -31,3 +31,5 @@ jobs:
         uses: zizmorcore/zizmor-action@main
         with:
           min-severity: "high"
+          # Disable online audits — see zizmor#1252 / #1874.
+          online-audits: "false"
