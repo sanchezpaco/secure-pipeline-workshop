@@ -8,9 +8,18 @@
 # TO USE THIS JOB:
 # 1. Copy this entire job definition into .github/workflows/pipeline-scan.yml
 # 2. Replace the current jobs: definition with this one
-# 3. The job will automatically scan all workflows in .github/workflows/
-# 4. Results will be uploaded to GitHub Advanced Security (SARIF format)
+# 3. The job scans all workflows in .github/workflows/
+# 4. Results upload to GitHub Advanced Security (SARIF format)
 # 5. Configure min-severity level as needed (low, medium, high, unknown)
+#
+# WHY THE EXTRA "Fail on findings" STEP?
+# `zizmorcore/zizmor-action` runs zizmor with `--format=sarif` whenever
+# `advanced-security: true` (its default). Per zizmor's design, that format
+# suppresses the elevated exit codes (11..14) it would otherwise return when
+# findings exist — so the action exits 0 even when High-severity issues are
+# reported. The action's own README acknowledges this. We add a post-step that
+# parses the produced SARIF and exits 1 if any finding remains, so SARIF still
+# uploads to GHAS and the pipeline correctly fails on findings (shift-left).
 # =============================================================================
 
 jobs:
@@ -28,9 +37,15 @@ jobs:
           persist-credentials: false
 
       - name: Run zizmor 🌈
+        id: zizmor
         uses: zizmorcore/zizmor-action@main
         with:
           min-severity: "high"
           # Disable online audits — they hard-crash the run on any GitHub API HTTP error
           # (see zizmor#1252 / #1874).
           online-audits: "false"
+
+      - name: Fail on findings
+        if: always()
+        run: |
+          test "$(jq '[.runs[].results[]] | length' "${{ steps.zizmor.outputs.output-file }}")" -eq 0
