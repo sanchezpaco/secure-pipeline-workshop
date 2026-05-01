@@ -92,3 +92,46 @@ By the end of this module, you will:
 [^2]: [Analysis of GitHub Repositories Surfaces Nearly 23M Secrets](https://devops.com/analysis-of-github-repositories-surfaces-nearly-23m-secrets/)
 [^3]: [Over 12 million auth secrets and keys leaked on GitHub in 2023](https://www.bleepingcomputer.com/news/security/over-12-million-auth-secrets-and-keys-leaked-on-github-in-2023/)
 [^4]: [The State of Secrets Sprawl 2024](https://securityboulevard.com/2024/03/the-state-of-secrets-sprawl-2024/)
+
+## Solutions (spoilers — open only when stuck)
+
+> The bait is two hardcoded AWS credentials at `code/src/simple-app.js:4-5`. They're a didactic AKIA — not real and not validated against AWS — but secret scanners detect them by format. The CI failures are intentional.
+
+<details>
+<summary><b>TruffleHog</b> — <code>Detector Type: AWS</code> at <code>code/src/simple-app.js:4</code></summary>
+
+**What TruffleHog flagged**: 1 unverified result on the `AKIA…` access-key literal. The job log prints a clean block:
+
+```
+Found unverified result 🐷🔑❓
+Detector Type: AWS
+Raw result: AKIA…
+File: code/src/simple-app.js
+Line: 4
+```
+
+**Why the snippet uses `--results=verified,unknown,unverified`**: the workshop's AKIA is not a real AWS key, so TruffleHog can't validate it against AWS. Under the default `verified`-only filter the build would silently pass — the extra flags are what make the bait fire.
+
+**Fix** — move the hardcoded credentials to environment variables:
+
+```diff
+-const AWS_ACCESS_KEY_ID = 'AKIA…REDACTED'
+-const AWS_SECRET_ACCESS_KEY = '[redacted-40-char-secret]'
++const AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID;
++const AWS_SECRET_ACCESS_KEY = process.env.AWS_SECRET_ACCESS_KEY;
+```
+
+</details>
+
+<details>
+<summary><b>Gitleaks</b> — <code>aws-access-token</code> + <code>generic-api-key</code> at <code>code/src/simple-app.js:4-5</code></summary>
+
+**What Gitleaks flagged**: 2 leaks — the access-key (rule `aws-access-token`) and the secret-key (rule `generic-api-key`, high-entropy match). The output has rich detail (Finding / Secret / RuleID / Entropy / File / Line / Fingerprint), but the `wget`-based install pollutes the log with a progress bar — scroll past it to find `Finding:`.
+
+**Snippet note**: the snippet uses `--no-git` so only the current filesystem is scanned, not git history. Once your latest commit is clean, Gitleaks goes green even if older commits on the branch still contain the literals.
+
+**Fix** — same as TruffleHog (move both to `process.env.*`). One edit clears both rules.
+
+</details>
+
+> ⚠️ **If you write notes inside this repo** (e.g. a `docs/` writeup that quotes the bait literals), Gitleaks will trip on your notes too. Either redact (`AKIA…REDACTED`, `[redacted-40-char-secret]`) or add a `.gitleaksignore` covering your notes path.

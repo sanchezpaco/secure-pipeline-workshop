@@ -64,3 +64,38 @@ By the end of this module, you will:
 
 ### Other Tools
 - [slimtoolkit/slim](https://github.com/slimtoolkit/slim): Tool to reduce the size of container images (making them more secure).
+
+## Solutions (spoilers — open only when stuck)
+
+> The container bait is the **base image** in `code/Dockerfile` — it ships with an EOL alpine that has unpatched HIGHs. The CI failure is intentional.
+
+<details>
+<summary><b>Trivy</b> — alpine OS-layer HIGHs (<code>musl</code>, etc.)</summary>
+
+**What Trivy flagged**: an `alpine 3.19.4` base ships `musl` / `musl-utils` HIGHs (e.g. `CVE-2025-26519`, `CVE-2026-40200`) and EOL warnings.
+
+**Reading the output**: Trivy prints a clean table (Library / Vulnerability / Severity / Status / Installed Version / Fixed Version / Title). This is the gold-standard output across the workshop.
+
+> ⚠️ **Don't just bump alpine minor**: `node:20-alpine3.19` → `node:20-alpine3.21` actually *increases* the finding count (alpine 3.21 still ships an unpatched openssl). Jump to a current node-major instead.
+
+> ⚠️ **"Fixed Version" is per-CVE, not per-package**: bumping to the version Trivy lists in that column only closes the CVE you happened to look at. Pick the latest stable image tag.
+
+**Fix** — bump the base image:
+
+```diff
+-FROM node:20-alpine3.19
++FROM node:25-alpine
+```
+
+</details>
+
+<details>
+<summary><b>Grype</b> — same root cause, terser output</summary>
+
+**What Grype reports**: a single line — `[…] ERROR discovered vulnerabilities at or above the severity threshold` — plus a helpful warning: `188 packages from EOL distro "alpine 3.19.4"`. The actual CVE list is uploaded as SARIF to the GitHub Code Scanning tab; if your fork doesn't have GHAS, the run page shows nothing actionable. Two snippet improvements help: switch `output-format: sarif` to `table` for the workshop, or upload the SARIF as an `actions/upload-artifact`.
+
+**Same root cause as Trivy**: EOL alpine base.
+
+**Fix** — identical to the Trivy fix above.
+
+</details>

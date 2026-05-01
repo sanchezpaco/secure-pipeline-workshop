@@ -67,3 +67,88 @@ By the end of this module, you will:
 - [ ] Security hotspots addressed
 - [ ] False positive management
 - [ ] Security metrics tracking
+
+## Solutions (spoilers — open only when stuck)
+
+> The bait for this module lives in two places: a vulnerable code pattern in `code/src/simple-app.js` (SAST) and a known-vulnerable dependency in `code/package.json` (SCA). The CI failures are intentional.
+
+<details>
+<summary><b>CodeQL (SAST)</b> — <code>js/command-line-injection</code> at <code>code/src/simple-app.js:42</code></summary>
+
+**What CodeQL flagged**: `exec(\`cat "${filePath}"\`, …)` flows the user-controlled `filePath` from the request body straight into a shell command. The TODO comment on the line above (`// TODO: Tech debt - should use fs.readFile instead of shell command for security`) hints at the intended fix.
+
+**Reading the output**: the snippet's `Summarize findings` step prints `ruleId | message | path:line` — exactly the format you need.
+
+**Fix** — replace the `exec(...)` with `fs.readFile(...)` confined to a safe base directory (the `path.resolve` + `startsWith` guard also clears any follow-up path-traversal rule):
+
+```js
+if (filePath) {
+  const fs = require('fs');
+  const path = require('path');
+
+  const safeBase = path.resolve(__dirname, 'public');
+  const resolved = path.resolve(safeBase, filePath);
+  if (!resolved.startsWith(safeBase + path.sep)) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid path' }));
+    return;
+  }
+
+  fs.readFile('./config.json', 'utf8', (configErr, configData) => {
+    const config = configErr ? { debug: false } : JSON.parse(configData);
+
+    fs.readFile(resolved, 'utf8', (error, stdout) => {
+      if (error) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: error.message }));
+        return;
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ config: config, content: stdout }));
+    });
+  });
+}
+```
+
+> Heads-up on CI wall-clock: each CodeQL run takes 4-5 minutes (init + database create + analyze). It's not stuck.
+
+</details>
+
+<details>
+<summary><b>Semgrep (SAST)</b> — <code>javascript.lang.security.audit.detect-child-process</code> at <code>code/src/simple-app.js:42</code></summary>
+
+**Reading the output**: Semgrep's job log only prints `Findings: 1 (1 blocking)` — no rule ID, no file/line. To see what failed, either open the GitHub Code Scanning tab (if your fork has GHAS) or download `semgrep-results.sarif` (you may want to add `actions/upload-artifact` to the snippet for this — it's missing by default).
+
+**Same root cause as CodeQL**: the `exec(\`cat "${filePath}"\`, …)` line.
+
+**Fix** — identical to the CodeQL fix above.
+
+</details>
+
+<details>
+<summary><b>osv-scanner (SCA)</b> — multiple CVEs on <code>axios@1.6.0</code> in <code>code/package.json</code></summary>
+
+**What osv-scanner flagged**: `axios@1.6.0` has multiple known CVEs (SSRF, DoS, credential leakage, etc.). The snippet's `Summarize findings` step prints them as `CVE-… | Package … is vulnerable to …`.
+
+**Fix** — bump `axios` to a recent patched version. Don't pick the lowest version that closes a single CVE; pick the latest stable patch level (CVEs in the same package keep coming):
+
+```diff
+   "dependencies": {
+-    "axios": "1.6.0"
++    "axios": "1.15.2"
+   }
+```
+
+Then regenerate the lockfile so it stays in sync with `package.json`:
+
+```bash
+cd code
+rm -f package-lock.json
+npm install --package-lock-only
+cd ..
+git add code/package.json code/package-lock.json
+```
+
+> Tip: `npm view axios versions` lists the available versions. At the time of writing `1.15.2` was clean; check the latest before committing.
+
+</details>

@@ -58,3 +58,47 @@ By the end of this module, you will:
   - [Untrusted input](https://securitylab.github.com/resources/github-actions-untrusted-input/)
   - [How to trust your building blocks](https://securitylab.github.com/resources/github-actions-building-blocks/)
   - [New vulnerability patterns and mitigation strategies](https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/)
+
+## Solutions (spoilers — open only when stuck)
+
+> Heads-up: each tool's snippet ships with one **planted bait line**. The very file you just pasted contains it on purpose. The CI failure is intentional — the goal of this section is to keep you from second-guessing whether you copy-pasted wrong.
+
+<details>
+<summary><b>Claws</b> — <code>UnpinnedAction</code> on <code>.github/workflows/pipeline-scan.yml:24</code></summary>
+
+**What Claws flagged**: the snippet's `Set Up Ruby` step uses `ruby/setup-ruby@master`, a moving ref. Per `claws-config.yml`, only `actions/*` is in `trusted_authors`; every other `uses:` must be SHA-pinned.
+
+**Fix** — pin to a tagged release SHA:
+
+```yaml
+- name: Set Up Ruby
+  uses: ruby/setup-ruby@0ecad18fe538ef70f6b82773daecc6af1a7fe58a # v1.252.0
+  with:
+    ruby-version: '3.3'
+```
+
+Use any current SHA from a tagged release of [`ruby/setup-ruby`](https://github.com/ruby/setup-ruby/tags) — the one above is `v1.252.0` at the time of writing.
+
+</details>
+
+<details>
+<summary><b>zizmor</b> — <code>zizmor/unpinned-uses</code> on <code>.github/workflows/pipeline-scan.yml:26</code></summary>
+
+**What zizmor flagged**: the snippet's `Run zizmor 🌈` step uses `zizmorcore/zizmor-action@main` — same antipattern as the Claws example, just on zizmor's own action.
+
+**Tip on reading zizmor's output**: the job log dumps the full SARIF as JSON. Search for `"ruleId"` and `"startLine"` to find the offending line without scrolling.
+
+**Fix** — pin to a tagged release SHA:
+
+```yaml
+- name: Run zizmor 🌈
+  id: zizmor
+  uses: zizmorcore/zizmor-action@b1d7e1fb5de872772f31590499237e7cce841e8e # v0.5.3
+  with:
+    min-severity: "high"
+    online-audits: "false"
+```
+
+Use any current SHA from a tagged release of [`zizmorcore/zizmor-action`](https://github.com/zizmorcore/zizmor-action/tags).
+
+</details>
