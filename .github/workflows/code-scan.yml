@@ -4,7 +4,7 @@ on:
     outputs:
       scan-result:
         description: "SAST/SCA scan summary"
-        value: ${{ jobs.codeql-scan.outputs.result }}
+        value: ${{ jobs.summary.outputs.result }}
 
 permissions:
   contents: read
@@ -12,51 +12,32 @@ permissions:
   actions: read
 
 jobs:
-  codeql-scan:
-    name: CodeQL SAST Scan
+  # 🚧 REPLACE THE JOB SECTION WITH WORKSHOP CONTENT! 🚧
+  # Copy from: workshop/code_scan/sast/{tool}/workflow.yml 
+  sast-scan:
+    name: "🚧 SAST Scan - Placeholder"
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
     outputs:
-      result: ${{ steps.scan-result.outputs.result }}
+      result: ${{ steps.placeholder.outputs.result }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
-        with:
-          languages: javascript
-          queries: +security-and-quality
-          source-root: code
-
-      - name: Run CodeQL analysis
-        id: codeql
-        uses: github/codeql-action/analyze@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
-        with:
-          category: "/language:javascript"
-          output: codeql-results
-
-      - name: Fail on findings
-        if: always() && hashFiles('codeql-results/*.sarif') != ''
+      - name: Workshop Placeholder
+        id: placeholder
         run: |
-          count=$(jq '[.runs[].results[]] | length' codeql-results/*.sarif | awk '{s+=$1} END {print s}')
-          echo "CodeQL findings: $count"
-          if [ "${count:-0}" -gt 0 ]; then
-            jq -r '.runs[].results[] |
-              "  - \(.ruleId) | \(.message.text)\n      \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 1)"' \
-              codeql-results/*.sarif
-            exit 1
-          fi
+          echo "🚧 Replace this job with content from workshop/code_scan/sast/{tool}/workflow.yml!"
+          echo "This will implement: SAST scan with your chosen tool"
+          echo "result=workshop-placeholder" >> "$GITHUB_OUTPUT"
 
-      - name: Set scan result
-        id: scan-result
-        if: always()
+  # 🚧 REPLACE THE JOB SECTION WITH WORKSHOP CONTENT! 🚧
+  # Copy from: workshop/code_scan/sca/{tool}/workflow.yml
+  sca-scan:
+    name: "🚧 SCA Scan - Placeholder"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.placeholder.outputs.result }}
+    steps:
+      - name: Workshop Placeholder
+        id: placeholder
         run: |
-          if [ "${{ steps.codeql.outcome }}" == "success" ]; then
-            echo "result=success" >> "$GITHUB_OUTPUT"
-          else
-            echo "result=failure" >> "$GITHUB_OUTPUT"
-          fi
+          echo "🚧 Replace this job with content from workshop/code_scan/sca/{tool}/workflow.yml!"
+          echo "This will implement: SCA scan with your chosen tool"
+          echo "result=workshop-placeholder" >> "$GITHUB_OUTPUT"
