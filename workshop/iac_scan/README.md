@@ -133,3 +133,46 @@ By the end of this module, you will:
 
 ### Other Tools
 - [DataDog/terraform-provider-terrapwner](https://github.com/DataDog/terraform-provider-terrapwner): Terrapwner is a security-focused Terraform provider designed for testing and validating CI/CD pipelines.
+
+## Solutions (spoilers — open only when stuck)
+
+> The bait is a single misconfigured ingress rule in `infra/main.tf`. Both scanners (Checkov and Trivy IaC) flag the same line range. One fix clears both.
+
+<details>
+<summary><b>Checkov</b> — <code>CKV_AWS_24</code> at <code>infra/main.tf:120-126</code></summary>
+
+**What Checkov flagged**: `aws_security_group.ecs_tasks` has an ingress rule with `description = "HTTP from ALB"` but `from_port = 22 / to_port = 22` and `cidr_blocks = ["0.0.0.0/0"]` — i.e. SSH open to the whole internet. Classic copy-paste/typo bait.
+
+**Reading the output**: Checkov (with `quiet: true`) prints only failed checks plus a summary like `Passed checks: 18, Failed checks: 1`. The output names the rule, the resource, the file, the line range, and quotes the offending lines. Best output in the module.
+
+**Fix** — close SSH-from-anywhere and reopen on the actual app port, restricted to the VPC CIDR. The SRE note above the resource literally hands you the data source you need (`data.aws_vpc.existing.cidr_block`):
+
+```diff
+   ingress {
+-    description = "HTTP from ALB"
+-    from_port   = 22
+-    to_port     = 22
++    description = "HTTP from ALB (workshop)"
++    from_port   = 3000
++    to_port     = 3000
+     protocol    = "tcp"
+-    cidr_blocks = ["0.0.0.0/0"]
++    cidr_blocks = [data.aws_vpc.existing.cidr_block]
+   }
+```
+
+</details>
+
+<details>
+<summary><b>Trivy IaC</b> — <code>AVD-AWS-0107</code> on the same block</summary>
+
+**What Trivy IaC flagged**: same ingress rule (port 22 from `0.0.0.0/0`). Trivy's rule ID is `AVD-AWS-0107`.
+
+**Reading the output**: the snippet is configured for SARIF-only — the job log shows `Running Trivy with options: trivy config infra/` followed by `Successfully uploaded results` with **no rule, no file, no line**. To see the finding, either:
+- read the GitHub Code Scanning tab (requires GHAS),
+- switch the snippet's `format` from `sarif` to `table` (sacrifices the GHAS upload), or
+- add an `actions/upload-artifact` step for `trivy-results.sarif` so you can download it.
+
+**Fix** — identical to the Checkov fix above.
+
+</details>
