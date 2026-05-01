@@ -118,11 +118,11 @@ resource "aws_security_group" "ecs_tasks" {
   vpc_id      = data.aws_vpc.existing.id
 
   ingress {
-    description = "HTTP from ALB (workshop)"
-    from_port   = 3000
-    to_port     = 3000
+    description = "HTTP from ALB"
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [data.aws_vpc.existing.cidr_block]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # trivy:ignore:AVD-AWS-0104
