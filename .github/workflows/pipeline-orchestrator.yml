@@ -4,10 +4,12 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   pipeline-scan:
     uses: ./.github/workflows/pipeline-scan.yml
-    secrets: inherit
     permissions:
       security-events: write
       contents: read # only needed for private repos
@@ -53,6 +55,7 @@ jobs:
       app-url: https://workshop-app-${{ github.ref_name }}.example.com
     permissions:
       id-token: write
+      contents: read
     secrets:
       AWS_IAM_ROLE_ARN: ${{ secrets.AWS_IAM_ROLE_ARN }}
 
