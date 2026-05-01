@@ -69,8 +69,6 @@ By the end of this module, you will:
 
 > The container bait is the **base image** in `code/Dockerfile` — it ships with an EOL alpine that has unpatched HIGHs. The CI failure is intentional.
 
-> 📌 **About the application-layer `axios` finding**: if Trivy/Grype also flag CVEs on `axios` here, that's an **SCA finding** that belongs in [Module 2 (Code Scan / SCA)](../code_scan/README.md), not in this module. Resolve it there with `osv-scanner` and the container scan stops complaining about it. The module ordering in the workshop is intentional: SCA in Module 2 should catch the dependency CVEs *before* they ever reach the container layer.
-
 <details>
 <summary><b>Trivy</b> — alpine OS-layer HIGHs (<code>musl</code>, etc.)</summary>
 

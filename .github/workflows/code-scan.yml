@@ -32,6 +32,19 @@ jobs:
             --output=semgrep-results.sarif \
             ./code/ || echo "SEMGREP_EXIT_CODE=$?" >> "$GITHUB_ENV"
 
+      - name: Summarize findings
+        if: always() && hashFiles('semgrep-results.sarif') != ''
+        run: |
+          COUNT=$(jq '[.runs[].results[]] | length' semgrep-results.sarif)
+          if [ "${COUNT:-0}" -eq 0 ]; then
+            echo "✅ No security alerts"
+          else
+            echo "❌ Found $COUNT Semgrep finding(s):"
+            jq -r '.runs[].results[] |
+              "  - \(.ruleId) | \(.message.text)\n      \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 1)"' \
+              semgrep-results.sarif
+          fi
+
       - name: Upload Semgrep SARIF
         uses: github/codeql-action/upload-sarif@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
         with:

@@ -72,6 +72,20 @@ jobs:
           output-format: sarif
           add-cpes-if-none: true
 
+      - name: Summarize findings
+        if: always() && steps.scan-tool.outputs.sarif != ''
+        run: |
+          SARIF="${{ steps.scan-tool.outputs.sarif }}"
+          COUNT=$(jq '[.runs[].results[]] | length' "$SARIF")
+          if [ "${COUNT:-0}" -eq 0 ]; then
+            echo "✅ No security alerts"
+          else
+            echo "❌ Found $COUNT Grype finding(s):"
+            jq -r '.runs[].results[] |
+              "  - \(.ruleId) | \(.message.text)\n      \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine // 1)"' \
+              "$SARIF"
+          fi
+
       - name: Upload SARIF to GitHub Advanced Security
         if: always()
         uses: github/codeql-action/upload-sarif@b2f9ef845756500b97acbdaf5c1dd4e9c1d15734 # v3.35.2
