@@ -43,10 +43,48 @@ We suggest you follow the workshop in the following order, but feel free to jump
 6. [Runtime Infrastructure Scan](runtime_infra_scan/)
 7. [AI Security Analysis](ai_scan/)
 
+## Prerequisites
+
+Before you start:
+
+1. **Fork this repository** — you need write access to push, create branches, and configure secrets.
+
+   [![Fork this repo](https://img.shields.io/badge/Fork-this_repo-2ea44f?logo=github&style=for-the-badge)](https://github.com/unicrons/secure-pipeline-workshop/fork)
+
+2. **Clone your fork and create a working branch.** Keep `main` clean so you can compare your changes against the upstream and reset easily if something goes sideways.
+
+   ```bash
+   git clone git@github.com:<your-user>/secure-pipeline-workshop.git
+   cd secure-pipeline-workshop
+   git checkout -b workshop
+   ```
+
+3. **(Recommended) Enable GitHub Advanced Security on your fork** — some tools (Semgrep, Grype, Trivy IaC) upload SARIF and only show full findings in the *Code Scanning* tab. Without GHAS, their job logs look thin; each module's `Solutions` section tells you where to look instead.
+
+4. **Per-module secrets and variables** — most modules work out of the box. The ones that don't:
+
+   | Module | What you need | Where to get it |
+   |---|---|---|
+   | 2. Code Scan | `NVD_API_KEY` *(secret, optional but recommended for OWASP Dependency Check)* | [Request from NVD](https://nvd.nist.gov/developers/request-an-api-key) |
+   | 6. Runtime Infra Scan | `AWS_IAM_ROLE_ARN` *(secret)*, `AWS_REGION` + `AWS_IAM_ROLE_SESSION_DURATION` *(vars)* | IAM role with `SecurityAudit` + `ViewOnlyAccess` and a GitHub OIDC trust policy |
+
+   Configure them at `Settings → Secrets and variables → Actions` on your fork.
+
 ## Workshop flow
-To begin, fork this repository. Then, for each module:
-1. Read the README.md file.
-2. For each tool within that module, follow the instructions in the `workflow.yml` file.
-3. Push your changes and observe the results.
-4. Work to fix any issues for that step until you achieve a green pipeline ✅.
-5. Then, try a different tool (if available) or proceed to the next module.
+
+The pipeline runs through `pipeline-orchestrator.yml`, which calls each module's workflow at `.github/workflows/<module>-scan.yml`. Every module ships as a **placeholder job** that you replace with a real tool's job — this is the core mechanic of the workshop.
+
+For each module:
+
+1. **Read** the module's `README.md` for context (why, common issues, tools available).
+2. **Pick a tool** and open `workshop/<module>/<tool>/workflow.yml`. The header comments list any extra prerequisites for that tool.
+3. **Replace** the entire `jobs:` section of `.github/workflows/<module>-scan.yml` with the `jobs:` section from the tool's `workflow.yml`. Keep the file's `name:`, `on:`, `inputs:`, `secrets:`, and `outputs:` blocks intact.
+4. **Commit and push** to your fork. The orchestrator triggers automatically — follow it in the *Actions* tab.
+5. **Read the failure**: each module ships with a planted **bait** (a misconfiguration or vulnerable line) the scanner is meant to catch. The job log points at the file and line. If you get stuck, the module's `Solutions` section is your safety net.
+6. **Fix the bait** and push again until the job goes green ✅.
+7. **(Optional)** Try a second tool in the same module — it usually flags the same bait, so the existing fix clears it too.
+8. **Move on** to the next module.
+
+> ℹ️ **The orchestrator runs every module's job on every push.** Modules whose placeholder you haven't replaced stay green by design (the placeholder just echoes a message). Focus on the job for the module you're working on.
+
+> ℹ️ **Module 6 exception**: the runtime infra scan runs against a *live AWS account*, so there's no planted bait to fix. It's expected to pass green even when Prowler reports findings — see its `Solutions` section.
